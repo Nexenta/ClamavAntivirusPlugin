@@ -1,0 +1,29 @@
+#!/bin/bash
+
+VSCANMANIFEST=/var/svc/manifest/system/filesystem/vscan.xml
+CICAPCONF=/etc/c-icap.conf
+CICAPHOST=localhost
+ENGINENAME=avscan
+
+
+if test -f $VSCANMANIFEST; then
+	svccfg import $VSCANMANIFEST
+	svcadm enable vscan
+fi
+
+if test -f $CICAPCONF/g; then
+	MAXSIZE=$(grep "^srv_clamav.MaxObjectSize" $CICAPCONF/g|tail -1|awk '{print $2}')b
+	if test -n $MAXSIZE; then
+		vscanadm set -p max-size=$MAXSIZE
+	fi
+fi
+
+vscanadm add-engine $ENGINENAME
+vscanadm set-engine -p host=$CICAPHOST $ENGINENAME
+
+#not neccessary, only for more information
+vscanadm get-engine $ENGINENAME
+vscanadm show
+
+#TODO: need reboot if vscan not in kernel (sunwvscankr)
+echo 'reboot-required' > /tmp/.nms-sysnotice.msg

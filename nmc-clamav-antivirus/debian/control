@@ -1,0 +1,13 @@
+Source: nmc-clamav-antivirus
+Section: base
+Priority: optional
+Maintainer: Sergey Voronezhskiy <sergey.voronezhskiy@gmail.com>
+Build-Depends: debhelper(>=4.9.5gnusol5)
+
+Package: nmc-clamav-antivirus
+Architecture: solaris-i386
+Depends: ${shlibs:Depends}, nmc (>= 1.1.9), clamav, clamav-base, clamav-daemon, clamav-freshclam, clamav-testfiles, libclamav6, c-icap, sunwvscanr, sunwvscankr, sunwvscanu
+Description: [:nxplugin::nmc:!clamav-antivirus] ClamAV AntiVirus extension for NMC
+ ClamAV AntiVirus integration with NMC (console)
+ after install this plugin you must reboot
+ .

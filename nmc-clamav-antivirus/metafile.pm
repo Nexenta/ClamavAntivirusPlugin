@@ -22,7 +22,7 @@
 # Copyright (C) 2006-2009 Nexenta Systems, Inc.
 # All rights reserved.
 #
-# METAFILE FOR NMS
+# METAFILE FOR NMC
 
 package Plugin::NmcClamAV;
 use base qw(NZA::Plugin);

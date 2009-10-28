@@ -346,7 +346,7 @@ sub show_clamav_antivirus
 	if ( defined $verbose ) {
 		print_out( "\n=== Last update log information ===\n" );
 		show_clamav_antivirus_update();
-		print_out( "\n=== Show Folder/Volumes vscan status ===\n" );
+		print_out( "\n=== Show Folder/Volumes vscan status on/off ===\n" );
 		push @_, "-a" if defined $all;
 		show_clamav_antivirus_vscan( @_ );
 		print_out( "\n=== Show AntiVirus configuration ===\n" );
@@ -363,51 +363,66 @@ sub show_clamav_antivirus_usage
 $cmdline
 Usage: [-v] [-c] [-t testfile] [-q] [-a]
 
-    -v 			show verbose information about update, vscan and config
-    -c 			check if antivirus can detect test virus
-    -t <testfile>	provide test virus file to check, default is
-    			/usr/share/clamav-testfiles/clam.zip if it exists
-    -q 			when checked testfile, quiet information about the
-    			successful check
-    -a			show all volumes and folders with "on" and "off" vscan
-    			status 
+   -v	show verbose information about update status, vscan
+	engine and configuration
+   -c	check if antivirus can detect test virus
+   -t	provide test virus file to check, default is
+	/usr/share/clamav-testfiles/clam.zip if it exists
+   -q	after checking testfile, shows quiet information about the
+	successful check
+   -a	shows all volumes and folders with "on" and "off" vscan
+	status 
 
-"on access" set the file attribute to -q- quarantine and users wouldn't be able
-to get access to the file. this file cold be only deleted. if the file need to
-be copied, you must disable vscan engine in folder which contains the file and
-drop the quarantine atribute.
+Examples:
 
-"by hand" scan selected Folder, recursively disabled by default,
-enable the posibility to remove infected file or move to destionation Folder. 
+To show information about last antivirus database update:
+${prompt}show clamav-antivirus update
 
-Example:
+Received signal: wake up
+ClamAV update process started at Tue Oct 27 17:00:14 2009
+main.cvd is up to date (version: 51, sigs: 540, f-level: 42, builder: sven)
+daily.cld is up to date (version: 99, sigs: 930, f-level: 43, builder: ccordes)
+
+
+To show currently settings of vscan engine, freshclam and c-icap
+${prompt}show clamav-antivirus show-settings
+
+max-size=10MB
+max-size-action=allow
+types=+*
+
+avscan:enable=on
+avscan:host=localhost
+avscan:port=1344
+avscan:max-connection=32
+
+srv_clamav.MaxObjectSize 10M
+srv_clamav.ClamAvMaxFilesInArchive 0
+srv_clamav.ClamAvMaxFileSizeInArchive 100M
+srv_clamav.ClamAvMaxRecLevel 5
+Checks 24
+DatabaseMirror db.local.clamav.net
+DatabaseMirror database.clamav.net
+
 
 To check the volumes and folders with "on access" vscan engine enabled/disabled:
-${prompt}setup clamav-antivirus vscan show -a
+${prompt}show clamav-antivirus vscan -a
 
-Enable "on access" Virus Scanning on the File Systems:
-${prompt}setup clamav-antivirus vscan folder tank/games enable
+tank/share on
+tank/home on
+tank/video off
+tank/music off
 
-or disable:
-${prompt}setup clamav-antivirus vscan volume tank folder trash disable
 
-You can enbale vscan in a volume and all folders it contains inherit this set
-${prompt}setup clamav-antivirus vscan volume tank enable
+To check if c-icap can detect the infected files and all services are online
+${prompt}show clamav-antivirus -c -q
 
-Scan any Folder for viruses manually
-${prompt}setup clamav-antivirus scan folder tank/incoming
-
-Scan Folder recursively and remove all
-
-Check for newest antivirus databases in Internet manually
-${prompt}setup clamav-antivirus update
-
-By default antivirus databases automaticaly downloaded from the Internet,
-you can change it by editing config file of "freshclam"
-${prompt}setup clamav-antivirus edit-settings freshclam
-
-To check if c-icap can detect the infected files
-${prompt}setup clamav-antivirus show -c
+STATE STIME FMRI
+online Oct_22 svc:/application/clamfresh:default
+online Oct_22 svc:/application/cicap:default
+online Oct_22 svc:/application/clamd:default
+online Oct_22 svc:/system/filesystem/vscan:icap
+C-ICAP: service check OK.
 
 EOF
 }
@@ -537,7 +552,7 @@ sub show_clamav_antivirus_vscan_usage
 $cmdline
 Usage: [-a]
 
-    -a		show "on" and "off" vscan status information
+    -a		shows "on" and "off" vscan status information (by default "on")
 
 EOF
 }
@@ -585,6 +600,68 @@ sub show_clamav_antivirus_config
 	}
 
 	&NMC::Util::print_execute_lines( \@lines );
+}
+
+sub setup_clamav_antivirus_usage
+{
+	my ($cmdline, $prompt, @path) = @_;
+
+	print_out <<EOF;
+$cmdline
+The vscan engine provides "on access" files checking, sets the file attribute
+to "q" (quarantine), so users won't be able to get access to the file. 
+The file could only be deleted. If the file need to
+be copied, you must disable vscan engine in folder which contains the file and
+reset the quarantine attribute.
+
+You can also scan Folder "manually". Please note that recursively scan
+disabled by default (enable with "-r" option). 
+to enable the possibility to remove infected files which were found during 
+the virus scanning use "-d" option.
+to move these files to the other folder use "-q <DIR>". 
+
+Examples:
+
+Enable "on access" Virus Scanning of the File Systems:
+${prompt}setup clamav-antivirus vscan folder tank/games enable
+
+or disable:
+${prompt}setup clamav-antivirus vscan volume tank folder trash disable
+
+If you enable vscan in a volume, then all the contained folders inherit this set
+${prompt}setup clamav-antivirus vscan volume tank enable
+
+To scan any Folder for viruses manually:
+${prompt}setup clamav-antivirus scan folder tank/incoming
+
+----------- SCAN SUMMARY -----------
+Known viruses: 637439
+Engine version: 0.95.2
+Scanned directories: 1
+Scanned files: 0
+Infected files: 0
+Data scanned: 0.00 MB
+Data read: 0.00 MB (ratio 0.00:1)
+Time: 6.969 sec (0 m 6 s)
+
+
+To scan Folder recursively and remove infected files:
+${prompt}setup clamav-antivirus scan folder tank/incoming -r -d
+
+To check for newest antivirus databases in Internet manually:
+${prompt}setup clamav-antivirus update
+
+ClamAV update process started at Tue Oct 27 17:00:14 2009
+main.cvd is up to date (version: 51, sigs: 540, f-level: 42, builder: sven)
+daily.cld is up to date (version: 99, sigs: 930, f-level: 43, builder: ccordes)
+
+
+By default antivirus databases update proceed automatically,
+you can change it by editing config file of "freshclam"
+${prompt}setup clamav-antivirus edit-settings freshclam
+
+
+EOF
 }
 
 sub setup_clamav_antivirus_property_show
@@ -778,53 +855,6 @@ sub setup_clamav_antivirus_vscan
 	#return &NMC::Builtins::Show::show_fs_df( @_ );
 }
 
-sub setup_clamav_antivirus_vscan_usage
-{
-	my ($cmdline, $prompt, @path) = @_;
-
-	print_out <<EOF;
-	$cmdline
-Usage: 
-    setup clamav-antivirus vscan Volume/Folder, enable/disable/reset
-
-    vscan set quarantine flag to file "on access"
-EOF
-}
-
-# XXX: this is example, not in word tree
-# sub setup_clamav_antivirus_vscan_unknown
-# {
-	# my ($h, @path) = @_;
-
-	# #$h = &NMC::Builtins::Show::show_volume_and_syspool_unknown;
-	# #$h = &NMC::Builtins::Show::show_fs_unknown;
-
-	# #NMC::Util::save_orig_hash_keys($h);
-	# my $folders = ();
-	# my $values = ();
-
-	# eval {
-		# $folders = &NZA::folder->get_names('([\w\-\.]+)/([\w\-\.]+)');
-	# }; if ($@) {
-		# print_error( "Error: get folder names\n" );
-		# return 1;
-	# }
-	# for my $f (@$folders) {
-		# $h->{$f} = $h->{_unknown};
-	# }
-
-	# eval {
-		# $values = &NZA::volume->get_names('');
-	# }; if ($@) {
-		# print_error( "Error: get volume names\n" );
-		# return 1;
-	# }
-	# for my $vol (@$values) {
-		# $h->{$vol} = $h->{_unknown};
-	# }
-
-	# return $h;
-# }
 
 sub setup_clamav_antivirus_update
 {
@@ -889,9 +919,9 @@ sub setup_clamav_antivirus_scan_usage
 
 Usage: [-r] [-d] [-q DIR]
 
-   -r		Scan subdirectories recursively (default: off)
-   -d		Remove infected files. Be careful!
-   -q <DIR>	Move infected files into DIR
+   -r 		scans subdirectories recursively (by default "off")
+   -d 		removes infected files. Be careful!
+   -q <DIR>	moves infected files into DIR
 
 EOF
 }
@@ -944,7 +974,7 @@ Edit c-icap configuration file.
 
 Beware: advanced usage only.
 
-Edit in this file only params begins ^srv_clamav.*
+In this file please edit parameters beginning with ^srv_clamav.*
 
 
 EOF

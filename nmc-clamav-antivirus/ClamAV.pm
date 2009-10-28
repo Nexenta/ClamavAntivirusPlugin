@@ -860,14 +860,11 @@ sub setup_clamav_antivirus_update
 {
 	my ($h, @path) = @_;
 	my @lines = ();
+	my $retval;
 
-	#TODO: add -v
-	#XXX: break with error, why?
-	if ( sysexec("freshclam", \@lines) != 0 ) {
-		print_error( "Error: execute freshclam.\n" );
-		&NMC::Util::print_execute_lines( \@lines );
-		return 1;
-	}
+	#NOTE: freshclam return always >0
+	$retval = sysexec("$cmd_avfresh", \@lines, 1);
+	&NMC::Util::print_execute_lines( \@lines );
 
 	return 0;
 }

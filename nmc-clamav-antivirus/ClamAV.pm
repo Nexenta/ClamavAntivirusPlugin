@@ -32,6 +32,7 @@ use NMC::Term::Clui;
 use strict;
 use warnings;
 
+#FIXME
 use Data::Dumper;
 
 ##############################  variables  ####################################
@@ -87,6 +88,7 @@ my %setup_clamav_folder_words = (
 		_enter => \&setup_clamav_antivirus_vscan,
 		enable => \&setup_clamav_antivirus_vscan,
 		disable => \&setup_clamav_antivirus_vscan,
+		'reset' => \&setup_clamav_antivirus_vscan,
 		_recompute => \&NMC::Builtins::Show::show_fs_unknown_and_syspool,
 		# TODO: need a design, [?folder?] disable/enbable/show [?folder?]
 		#show => \&bi_show,
@@ -133,6 +135,7 @@ my %setup_clamav_words =
 				_enter => \&setup_clamav_antivirus_vscan,
 				enable => \&setup_clamav_antivirus_vscan,
 				disable => \&setup_clamav_antivirus_vscan,
+				'reset' => \&setup_clamav_antivirus_vscan,
 				_recompute => \&NMC::Builtins::Show::show_volume_and_syspool_unknown,
 				$NMC::FOLDER => \%setup_clamav_folder_words,
 			},
@@ -183,90 +186,29 @@ sub bi_show {
 sub __check_cicap
 {
 	my ($verbose, $quiet, $testfile) = @_;
-	my @lines = ();
-	$testfile = "/usr/share/clamav-testfiles/clam.zip" unless defined $testfile;
+	my $lines;
 
-	if ( defined $verbose ) {
-
-		if ( ! -f $testfile ) {
-			print_error( "Error: icap-client check test virus.\nfile: $testfile not found.\n" );
-			return 1;
-		}
-
-		if ( sysexec("icap-client -f $testfile -s avscan", \@lines ) != 0 ) {
-			print_error( "Error: icap-client check test virus.\n" );
-			&NMC::Util::print_execute_lines( \@lines );
-			__show_message_reinstall();
-			return 1;
-		}
-
-	} else {
-
-		if ( sysexec("icap-client", \@lines ) != 0 ) {
-			print_error( "Error: icap-client test service reply.\n" );
-			&NMC::Util::print_execute_lines( \@lines );
-			__show_message_reinstall();
-			return 1;
-		}
+	eval {
+		$lines = &NZA::plugin('nms-clamav-antivirus')->icap( $verbose, $testfile );
+	}; if ( nms_catch( $@ ) ) {
+		nms_print_error( $@ ) unless $quiet;
+		__show_message_reinstall();
+		return 1;
 	}
 
-	if ( defined $quiet ) {
-		print_out( "C-ICAP: service check OK.\n" );
-	} else {
-		print_out( "\n=== Checking c-icap service ===\n" );
-		&NMC::Util::print_execute_lines( \@lines );
-	}
+	&NMC::Util::nmc_show_less( $lines ) unless $quiet;
+	print_out( "C-ICAP: service check OK.\n" ) if $quiet;
 	return 0;
 }
 
 sub __install_engine
 {
-	my @lines = ();
-
-	# TODO: migrate to server part, need replace any specific commands
-	print_out( "Try to install $prop_name.\n" );
-	my $manifest = '/var/svc/manifest/system/filesystem/vscan.xml';
-	my $host = 'localhost';
-
-	# FIXME: check if engine not exists and service exists, etc
-	if ( sysexec( "svccfg import $manifest", \@lines ) != 0) {
-		print_error("Error: import manifest $prop_name\n");
-		&NMC::Util::print_execute_lines( \@lines );
-		return 1;
-	}
-
-	if ( sysexec( "svcadm enable $prop_name", \@lines ) != 0) {
-		print_error("Error: enable service $prop_name\n");
-		&NMC::Util::print_execute_lines( \@lines );
-		return 1;
-	}
-
-	if ( sysexec( "$cmd_avadm add-engine $engine_name", \@lines ) != 0) {
-		print_error("Error: add-engine $engine_name\n");
-		&NMC::Util::print_execute_lines( \@lines );
-		return 1;
-	}
-
-	if ( sysexec( "$cmd_avadm set-engine -p host=$host $engine_name", \@lines ) != 0) {
-		print_error("Error: set-engine $engine_name\n");
-		&NMC::Util::print_execute_lines( \@lines );
-		return 1;
-	}
-
-	return 0;
+	return &NZA::plugin('nms-clamav-antivirus')->install_engine();
 }
 
 sub __check_engine
 {
-	my @lines = ();
-
-	if ( sysexec( "$cmd_avadm get-engine $engine_name", \@lines ) != 0) {
-		print_error("Error: engine $engine_name is off\n");
-		&NMC::Util::print_execute_lines( \@lines );
-		return 1;
-	}
-
-	return 0;
+	return &NZA::plugin('nms-clamav-antivirus')->check_engine();
 }
 
 sub __show_message_reinstall
@@ -296,52 +238,25 @@ sub show_clamav_antivirus
 	my ($h, @path) = @_;
 	my ($verbose, $check, $quiet, $testfile, $all) = NMC::Util::get_optional('vcqt:a', \@path);
 
-	my @lines = ();
+	my $retval;
+	my %fmri = (
+		"vscan" => "svc:/system/filesystem/vscan:icap",
+		"cicap" => "svc:/application/cicap:default",
+		"clamfresh" => "svc:/application/clamfresh:default",
+	);
 
-	# &NZA::smf->get_names( '' );
-	# only returns:
-	# 'svc:/application/nmv:default'
-	# 'svc:/network/apache2:default'
-	# 'svc:/network/ftp:default'
-	# 'svc:/network/iscsi_initiator:default'
-	# 'svc:/network/ldap/client:default'
-	# 'svc:/network/nfs/client:default'
-	# 'svc:/network/nfs/server:default'
-	# 'svc:/network/ntp:default'
-	# 'svc:/network/rsync:default'
-	# 'svc:/network/smb/server:default'
-	# 'svc:/network/snmpd:default'
-	# 'svc:/network/ssh:default'
-	# 'svc:/system/hal:default'
-	# 'svc:/system/iscsitgt:default'
-	# 'svc:/system/ndmpd:default'
-	# or &NZA::Utils::clear_enable_smf_svc
-	# NZA::Utils::set_smf_confopt
-	# NZA::Utils::get_smf_confopt
-	# NZA::Utils::del_smf_confgroup
+	print_out( "\n=== AntiVirus services status ===\n" );
 
-	# my %fmri = (
-	# "vscan" => "svc:/system/filesystem/vscan:icap",
-	# "cicap" => "svc:/application/cicap:default",
-	# "clamd" => "svc:/application/clamd:default",
-	# "clamfresh" => "svc:/system/filesystem/vscan:icap",
-	# );
-	#Plugin::NmcClamAV
-	#&NZA::smf->set_child_prop( $fmri{'vscan'}, 'vscan', 'on' );
-	#$retval = &NZA::smf->get_state( $fmri{'vscan'} );
-	#print_out( "vscan: $retval\n" );
-	# TODO: migrate to server part, add services to &NZA::smf
-	if ( sysexec("svcs {vscan,cicap,clamd,clamfresh}", \@lines) == 0 ) {
-		print_out( "\n=== AntiVirus services status ===\n" );
-		&NMC::Util::print_execute_lines( \@lines );
-	} else {
-		print_error( "Error: check services depends.\n" );
-		&NMC::Util::print_execute_lines( \@lines );
-		__show_message_reinstall();
-		return 1;
+	foreach my $service ( keys %fmri ) {
+		eval {
+			$retval = &NZA::smf->get_state( $fmri{$service} );
+		}; if ( nms_catch( $@ ) ) {
+			nms_print_error( $@ );
+		}
+		print_out( "$service: $retval\n" );
 	}
 
-	__check_cicap( ( $verbose, $quiet, $testfile ) ) if defined $check;
+	__check_cicap( $verbose, $quiet, $testfile ) if defined $check;
 
 	if ( defined $verbose ) {
 		print_out( "\n=== Last update log information ===\n" );
@@ -460,19 +375,6 @@ sub show_clamav_antivirus_update
 		nms_print_error($@);
 		return 1;
 	}
-
-	#my $cmd = q(ruby1.8 -e "puts File.read('/var/log/clamav/freshclam.log').split(/^[-]+$/).select{|s|s=~/\w+/}.pop.strip");
-	#my @lines = ();
-	#if ( nmc_is_server() ) {
-	#if ( sysexec( $cmd, \@lines ) != 0 ) {
-	#print_error( "Error: can't exec ruby\n" );
-	#return 1;
-	#}
-	#&NMC::Util::print_execute_lines( \@lines );
-	#} else {
-	#&NMC::Util::print_warning( "Error: not server \n" );
-	#system( $cmd );
-	#}
 }
 
 sub show_clamav_antivirus_vscan
@@ -482,66 +384,31 @@ sub show_clamav_antivirus_vscan
 	my( $all ) = &NMC::Util::get_optional('a', \@path);
 	my( $folder, $volume ) = __zfs_set_vscan_get_args( \@path );
 
-	#FIXME _less
-	#no folders found with vscan on, try param -a, and see all folders and
-	#volumes where u can set vscan
-	#print_out( "\n=== Current active vscan ===\n" );
-
-	my $nza_folders_vscan = ();
-	my $zfs_path =	( ( defined $volume ) ? $volume : '' ) .
-	( ( defined $folder ) ? '/' . $folder : '' );
-
+	my $list;
 	eval {
-		if ( defined( $all ) ) {
-			# NOTE: scalar @$nza_folders_vscan return 1 if count 1
-			# $#$nza_folders_vscan return 0 if 1, -1 if 0, 3 if 4
-			$nza_folders_vscan = &NZA::folder->get_all_names( $zfs_path );
-		} else {
-			# XXX: where is volume?
-			$nza_folders_vscan = &NZA::folder->get_names_by_prop( 'vscan', 'on', $zfs_path );
-		}
-	}; if ( nms_catch( $@ ) ) {
-		nms_print_error( $@ );
+		$list = &NZA::plugin('nms-clamav-antivirus')->get_vscan_props($volume, $folder, (defined $all) ? '' : 'on');
+	}; if (nms_catch($@)) {
+		nms_print_error($@);
 		return 1;
 	}
 
-	my $l = 4; # NAME
-	foreach my $folder_name ( @$nza_folders_vscan ) {
+	my $l = length("NAME");
+	foreach my $zname ( keys %$list ) {
 
-		$l = length( $folder_name ) if ( length( $folder_name ) > $l );
+		$l = length( $zname ) if ( length( $zname ) > $l );
 	}
 	$l += 2;
 	my $fmt = "%-${l}s%-8s\n";
 
-	hdr_printf( $fmt, "NAME", "VSCAN" ) if scalar @$nza_folders_vscan;
+	hdr_printf( $fmt, "NAME", "VSCAN" ) if scalar keys %$list;
 
-	#&NMC::Util::print_list( @$nza_folders_vscan );
-	#FIXME: replace folder_name variable name to zfs_name or zfs_path
-	foreach my $folder_name ( sort @$nza_folders_vscan ) {
+	foreach my $zname ( sort keys %$list ) {
 
-		#TODO if $folder_name is only $volume_name, return off
-		my $status;
-
-		if ( $folder_name =~ m/^([\w\.\-]+)\/([\w\.\-]+)/ ) {
-			eval {
-				$status = &NZA::folder->get_child_prop( $folder_name, "vscan" );
-			}; if ( nms_catch( $@ ) ) {
-				nms_print_error( $@ );
-				return 1;
-			}
-		} else {
-			my @lines = ();
-			# TODO: migrate to server part, $NZA::folder-get_child_prop(...
-			if ( sysexec("zfs get -Hp -o value $prop_name $folder_name", \@lines) != 0 ) {
-				print_error("Error: get property $prop_name for $folder_name failed\n");
-				$status = 'unknown';
-			} else {
-				$status = join('', @lines);
-			}
-		}
-
-		print_out( sprintf( $fmt, $folder_name, $status ) );
+		my $status = $list->{$zname};
+		print_out( sprintf( $fmt, $zname, $status ) );
 	}
+
+	# &NMC::Util::nmc_show_less( $nza_folders_vscan );
 }
 
 sub show_clamav_antivirus_vscan_usage
@@ -561,45 +428,23 @@ EOF
 sub show_clamav_antivirus_config
 {
 	my ($h, @path) = @_;
+	my ($section) = &NMC::Util::names_to_values_from_path( \@path, "section"); 
 
-	my @lines = ();
+	my $params;
 
-	if ( ! -f $cfg_avcicap ) {
-		print_error( "Error: not found $cfg_avcicap.\n" );
-		__show_message_reinstall();
-		return 1;
-	}
-	if ( ! -f $cfg_avfresh ) {
-		print_error( "Error: not found $cfg_avfresh.\n" );
-		__show_message_reinstall();
+	eval {
+		$params = &NZA::plugin('nms-clamav-antivirus')->get_params($section);
+	}; if ( nms_catch( $@ ) ) {
+		nms_print_error( $@ );
 		return 1;
 	}
 
-	# TODO: need a design, show clamav-antivirus config engine/freshclam/c-icap
-	if ( sysexec( "$cmd_avadm show", \@lines ) != 0 ) {
-		print_error( "Error: execute $cmd_avadm show.\n" );
-		&NMC::Util::print_execute_lines( \@lines );
-		__show_message_reinstall();
-		return 1;
+	foreach my $prop (sort keys %$params) {
+
+		print_out("  $prop = $params->{$prop}\n");
 	}
 
-	# &NMC::Util::nmc_show_any_file($cfg_avcicap, 'NMC::Util::nmc_show_less');
-	if ( sysexec( qq#egrep "(^srv_clamav.ClamAvMaxFilesInArchive|^srv_clamav.ClamAvMaxFileSizeInArchive|^srv_clamav.ClamAvMaxRecLevel|^srv_clamav.MaxObjectSize)" $cfg_avcicap#, \@lines ) != 0 ) {
-		print_error( "Error: execute grep ... $cfg_avcicap.\n" );
-		&NMC::Util::print_execute_lines( \@lines );
-		__show_message_reinstall();
-		return 1;
-	}
-
-	# &NMC::Util::nmc_show_any_file($cfg_avfresh, 'NMC::Util::nmc_show_less');
-	if ( sysexec( qq#egrep "(^Checks|^DatabaseMirror)" $cfg_avfresh#, \@lines ) != 0 ) {
-		print_error( "Error: execute grep ... $cfg_avfresh.\n" );
-		&NMC::Util::print_execute_lines( \@lines );
-		__show_message_reinstall();
-		return 1;
-	}
-
-	&NMC::Util::print_execute_lines( \@lines );
+	return 0;
 }
 
 sub setup_clamav_antivirus_usage
@@ -678,88 +523,56 @@ sub setup_clamav_antivirus_property
 {
 	my ($h, @path) = @_;
 	my ($property) = &NMC::Util::names_to_values_from_path( \@path, $NMC::PROPERTY); 
+	# TODO: yes for immediately apply changes?
+	# my ($yes, $value) = NMC::Util::get_optional('ys:', \@path);
+	my ($value) = NMC::Util::get_optional('s:', \@path);
 
-	my $new_val;
-	my $prop_val;
-	my @lines = ();
+	my %setparams = ();
 
-	if ( defined ( $property ) ) {
-
-		if ( $property eq 'maxfilesize' ) {
-
-			if ( sysexec("$cmd_avadm get -p max-size", \@lines ) != 0 ) {
-				print_error( "Error: get $NMC::PROPERTY $property.\n" );
-				&NMC::Util::print_execute_lines( \@lines );
-				__show_message_reinstall();
-				return 1;
-			}
-
-			$prop_val = join('', @lines );
-			# $prop_val =~ s/^\s+//;
-			# $prop_val =~ s/\s+$//;
-			$prop_val =~ s/max-size=(\d+[GMK]{1}B)/$1/;
-			$prop_val = "10MB" unless ( $prop_val =~ m/\d+[GMK]{1}B/ );
-
-			return 0 if ( ! &NMC::Util::input_field($prop_name,
-					0,
-					"Enter value of max file size",
-					\$new_val,
-					current => $prop_val,
-					#cmdopt => 's:',
-					cmdopt => '',
-					match => '^\d+[GMK]{1}B$',
-					'no-ucfirst' => undef,
-					"on-empty" => $NMC::warn_no_changes,
-					"on-equal" => $NMC::warn_no_changes));
-
-			if ( sysexec( "$cmd_avadm set -p max-size=$new_val", \@lines ) != 0 ) {
-				print_error( "Error: set $NMC::PROPERTY $property to value $new_val.\n" );
-				&NMC::Util::print_execute_lines( \@lines );
-				#__show_message_reinstall();
-				return 1;
-			}
-
-			# XXX: setting will change after 1-3min.
-			# show_clamav_antivirus_config(@_);
-
-			return 0;
-		}
-
-		print_error( "Error: property $property not exists.\n" );
-
-	} else {
-
-		print_error( "Error: unknown property.\n" );
+	unless (defined($value)) {
+		return 1 if (!NMC::Util::input_field('Value',
+				7,
+				"Please enter value for property '$property'",
+				\$value,
+				cmdopt => 's:',
+				# current => $prop_val,
+				# match => '^\d+[GMK]{1}B$',
+				# 'no-ucfirst' => undef,
+				# 'on-equal' => $NMC::warn_no_changes,
+				'on-empty' => $NMC::warn_no_changes));
+		return 1 if (&choose_ret_ctrl_c());
 	}
-	return 1;
+
+	$setparams{'name'} = $property;
+	$setparams{'value'} = $value;
+
+	eval {
+		&NZA::plugin('nms-clamav-antivirus')->set_params(\%setparams);
+	}; if ( nms_catch( $@ ) ) {
+		nms_print_error( $@ );
+		return 1;
+	}
+
+	return 0;
 }
 
 sub setup_clamav_antivirus_property_unknown
 {
 	my ($h, @path) = @_;
+	my ($section) = &NMC::Util::names_to_values_from_path( \@path, "section"); 
 	my $props;
 
-	# skip redundant tree re-calculations
-	#return $h if (exists $h->{'smtp_server'});
-	my %prop_desc = (
-		maxfilesize		=> ["Maximum file size"],
-		# maxfilesizeinarchive 	=> ["Maximum file size stored in archives"],
-		# maxfilesinarchive 	=> ["Maximum count files in arhives"],
-		# maxrecursionlevel 	=> ["Maximum count of sub arhives"],
-		# databasemirror 	=> ["Select the mirror of virus database"],
-		# quarantinefolder 	=> ["Manual scan quarantine files stored location"],
-	);
+	eval {
+		$props = &NZA::plugin('nms-clamav-antivirus')->get_params_desc($section);
+	}; if ( nms_catch( $@ ) ) {
+		nms_print_error( $@ );
+		return 1;
+	}
 
-	# eval {
-	# $props = &NZA::server->list_props();
-	# }; if (nms_catch($@)) {
-	# nms_print_error($@);
-	# return 0;
-	# }
-	if (scalar keys %prop_desc) {
-		for my $k (keys %prop_desc) {
+	if (scalar keys %$props) {
+		for my $k (keys %$props) {
 			$h->{$k} = NMC::Util::duplicate_hash_deep($h->{_unknown});
-			$h->{$k}{_help} = $prop_desc{$k};
+			$h->{$k}{_help} = $props->{$k};
 		}
 	}
 
@@ -785,69 +598,12 @@ sub setup_clamav_antivirus_vscan
 				return 1;
 			}
 		}
-		# TODO: add inherit
-		#if ( $action eq 'reset' ) {
-		#zfs inherit vscan ...
-		if ( $action eq 'enable' ) {
-			if ( defined( $folder ) && defined( $vol ) ) {
-				# TODO: migrate to server part
-				#&NZA::folder->set_child_prop( "$vol/$folder", $prop_name, "on" );
-				#com.nexenta.nms.PropertyAccessDenied:
-				#FolderContainer: denied access to property vscan
-				#- allowed: ri, attempted: w
-				if ( sysexec( "zfs set $prop_name=on $vol/$folder", \@lines ) != 0 ) {
-					print_error("Error: $action $prop_name for folder $vol/$folder\n");
-					&NMC::Util::print_execute_lines( \@lines );
-					return 1;
-				}
-
-			} else {
-				if ( defined( $vol ) ) {
-					# TODO: migrate to server part
-					#&NZA::volume->set_child_prop( "$vol", $prop_name, "on" );
-					#com.nexenta.nms.PropertyNotFound:
-					#Interface com.nexenta.nms.Volume
-					#does not publish property vscan
-					if ( sysexec( "zfs set $prop_name=on $vol", \@lines ) != 0 ) {
-						print_error("Error: $action $prop_name\n");
-						&NMC::Util::print_execute_lines( \@lines );
-						return 1;
-					}
-				}
-			}
-			# push @_, "-a" unless defined $all;
-			# show_clamav_antivirus_vscan( @_ );
-			return 0;
+		eval {
+			&NZA::plugin('nms-clamav-antivirus')->set_vscan_value($vol, $folder, $action);
+		}; if ( nms_catch( $@ ) ) {
+			nms_print_error( $@ );
+			return 1;
 		}
-		if ( $action eq 'disable' ) {
-			if ( defined( $folder ) && defined( $vol ) ) {
-				# TODO: migrate to server part
-				#&NZA::folder->set_child_prop( "$vol/$folder", $prop_name, "off" );
-				if ( sysexec( "zfs set $prop_name=off $vol/$folder", \@lines ) != 0 ) {
-					print_error("Error: $action $prop_name for folder $vol/$folder\n");
-					&NMC::Util::print_execute_lines( \@lines );
-					return 1;
-				}
-
-			} else {
-				if ( defined( $vol ) ) {
-					# TODO: migrate to server part
-					#&NZA::volume->set_child_prop( "$vol", $prop_name, "on" );
-					if ( sysexec( "zfs set $prop_name=off $vol", \@lines ) != 0 ) {
-						print_error("Error: $action $prop_name on volume: $vol\n");
-						&NMC::Util::print_execute_lines( \@lines );
-						return 1;
-					}
-				}
-			}
-			# push @_, "-a" unless defined $all;
-			# show_clamav_antivirus_vscan( @_ );
-			return 0;
-		}
-
-		print_error("Error: unknown action $action\n");
-		return 1;
-
 	} else {
 		push @_, "-a" unless defined $all;
 		show_clamav_antivirus_vscan( @_ );
@@ -859,14 +615,15 @@ sub setup_clamav_antivirus_vscan
 sub setup_clamav_antivirus_update
 {
 	my ($h, @path) = @_;
-	my @lines = ();
-	my $retval;
+	my $lines;
+	eval {
+		$lines = &NZA::plugin('nms-clamav-antivirus')->freshclam();
+	}; if( nms_catch( $@ ) ) {
+		nms_print_error( $@ );
+		return 1;
+	}
 
-	#NOTE: freshclam return always >0
-	$retval = sysexec("$cmd_avfresh", \@lines, 1);
-	&NMC::Util::print_execute_lines( \@lines );
-
-	return 0;
+	&NMC::Util::nmc_show_less( $lines );
 }
 
 #TODO: support location|path not only folders 
@@ -875,21 +632,24 @@ sub setup_clamav_antivirus_scan
 	my ($h, @path) = @_;
 	my( $recursive, $delete, $quarantine ) = &NMC::Util::get_optional('rdq:', \@path);
 	my ($folder, $vol) = __zfs_set_vscan_get_args(\@path);
-	my @lines = ();
-
-	$cmd_avscan .= " -r" if defined( $recursive );
-	$cmd_avscan .= " --remove=yes" if defined( $delete );
-	$cmd_avscan .= " --move=$quarantine" if defined( $quarantine );
+	my $lines;
 
 	if ( defined( $folder ) && defined( $vol ) ) {
 
-		if ( sysexec("$cmd_avscan /volumes/$vol/$folder", \@lines) != 0 ) {
-			print_error( "ALERT: in $folder VIRUS found!\n" );
-			&NMC::Util::print_execute_lines( \@lines );
+		eval {
+			$lines = &NZA::plugin('nms-clamav-antivirus')->clamscan(
+				$vol,
+				$folder,
+				defined( $recursive ),
+				defined( $delete ),
+				defined( $quarantine )
+				);
+		}; if( nms_catch( $@ ) ) {
+			nms_print_error( $@ );
 			return 1;
 		}
 
-		&NMC::Util::print_execute_lines( \@lines );
+		&NMC::Util::nmc_show_less( $lines );
 
 		return 0;
 
@@ -897,7 +657,6 @@ sub setup_clamav_antivirus_scan
 		print_error( "Error: please select the folder.\n" );
 		return 1;
 	}
-
 }
 
 sub setup_clamav_antivirus_scan_unknown

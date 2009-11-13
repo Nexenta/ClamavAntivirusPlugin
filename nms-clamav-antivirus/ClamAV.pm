@@ -329,7 +329,7 @@ sub stats {
 	my ($self, $zero) = @_;
 	my @lines = ();
 	$zero = ( $zero ) ? "-z" : "";
-	nza_exec("$NZA::ClamAV::CMD_VSCANADM stats $zero", @lines);
+	nza_exec("$NZA::ClamAV::CMD_VSCANADM stats $zero", \@lines);
 
 	@lines = map { chomp($_); "$_\n" } @lines;
 	return \@lines;

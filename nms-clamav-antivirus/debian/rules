@@ -5,20 +5,21 @@
 export DH_COMPAT=4
 
 PACKAGE=$(shell dh_listpackages)
-PLUGINDIR=var/lib/nza/plugins/nmc/$(PACKAGE)
+PLUGINDIR=var/lib/nza/plugins/nms/$(PACKAGE)
 BLEACH_FLTR=NZA\|SNAPUtil.pm\|SMFUtil.pm
 
 clean:
 	dh_testdir
 	dh_testroot
 	dh_clean -d
-	rm -f debian/$(PACKAGE) debian/ClamAV.pm debian/files
+	rm -f debian/$(PACKAGE) debian/ClamAV.pm debian/Consts.pm debian/files
 
 deploy-dirs:
 	rm -rf /$(PLUGINDIR)
 	mkdir -p /$(PLUGINDIR) 2>/dev/null || true
 	ln -s $(PWD)/metafile.pm /$(PLUGINDIR) || true
 	ln -s $(PWD)/ClamAV.pm /$(PLUGINDIR) || true
+	ln -s $(PWD)/Consts.pm /$(PLUGINDIR) || true
 
 deploy:
 	dh_testdir
@@ -30,6 +31,7 @@ binary-arch:
 	dh_installdirs $(PLUGINDIR)
 	dh_install metafile.pm $(PLUGINDIR)
 	dh_install ClamAV.pm $(PLUGINDIR)
+	dh_install Consts.pm $(PLUGINDIR)
 	dh_installdocs
 	dh_installchangelogs
 	dh_compress

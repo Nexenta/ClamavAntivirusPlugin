@@ -441,10 +441,19 @@ sub set_vscan_value {
 
 	} elsif ( $value eq 'reset' ) {
 
+		#
 		# if object is volume the nza think default is "on" but "zfs -
+		#
 		$fol->_set_child_prop('vscan', 'off') if $fol->isa('NZA::Volume');
 		$fol->inherit_prop('vscan');
+		#
+		# inherit_prop don't dirty (refresh) like set_child_prop
+		#
 		$fol->_dirty_recurs();
+		#
+		# and _dirty_recurs don't dirty self (root)
+		#
+		$fol->dirty(1); # set flag, then other run the $fol->refresh();
 	}
 }
 

@@ -33,8 +33,8 @@ $Plugin::NmcClamAV::NAME		= 'nmc-clamav-antivirus';
 $Plugin::NmcClamAV::DESCRIPTION		= 'ClamAV the AntiVirus';
 $Plugin::NmcClamAV::LICENSE		= 'Open Source (CDDL)';
 $Plugin::NmcClamAV::AUTHOR		= 'Nexenta Systems, Inc';
-$Plugin::NmcClamAV::VERSION		= '0.1';
-$Plugin::NmcClamAV::GROUP		= '!clamav-antivirus';
+$Plugin::NmcClamAV::VERSION		= '0.9';
+$Plugin::NmcClamAV::GROUP		= 'clamav-antivirus';
 $Plugin::NmcClamAV::LOADER		= 'ClamAV.pm';
 @Plugin::NmcClamAV::FILES		= ('ClamAV.pm');
 

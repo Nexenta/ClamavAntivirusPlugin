@@ -560,7 +560,8 @@ package NZA::ClamAVIPC;
 use strict;
 use base qw(NZA::ObjectIPC);
 use Net::DBus::Exporter qw(com.nexenta.nms.ClamAV);
-use NZA::ClamRunner;
+#use ClamRunner;
+require 'nms-clamav-antivirus/ClamRunner.pm';
 
 my %props = (
 	#

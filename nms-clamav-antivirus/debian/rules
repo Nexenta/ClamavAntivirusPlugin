@@ -12,7 +12,7 @@ clean:
 	dh_testdir
 	dh_testroot
 	dh_clean -d
-	rm -f debian/$(PACKAGE) debian/ClamAV.pm debian/Consts.pm debian/files
+	rm -f debian/$(PACKAGE) debian/ClamAV.pm debian/Consts.pm debian/ClamRunner.pm debian/clamav-scan debian/files
 
 deploy-dirs:
 	rm -rf /$(PLUGINDIR)
@@ -20,6 +20,9 @@ deploy-dirs:
 	ln -s $(PWD)/metafile.pm /$(PLUGINDIR) || true
 	ln -s $(PWD)/ClamAV.pm /$(PLUGINDIR) || true
 	ln -s $(PWD)/Consts.pm /$(PLUGINDIR) || true
+	ln -s $(PWD)/ClamRunner.pm /$(PLUGINDIR) || true
+	#cp clamav-scan /var/lib/nza 2>/dev/null || true
+	ln -s $(PWD)/clamav-scan /var/lib/nza || true
 
 deploy:
 	dh_testdir
@@ -32,6 +35,9 @@ binary-arch:
 	dh_install metafile.pm $(PLUGINDIR)
 	dh_install ClamAV.pm $(PLUGINDIR)
 	dh_install Consts.pm $(PLUGINDIR)
+	dh_install ClamRunner.pm $(PLUGINDIR)
+	pp -P -T clamav-scan $(NMS_BLEACH_OPTS) -o debian/clamav-scan clamav-scan
+	dh_install debian/clamav-scan var/lib/nza
 	dh_installdocs
 	dh_installchangelogs
 	dh_compress

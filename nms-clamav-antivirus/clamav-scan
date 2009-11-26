@@ -1,0 +1,76 @@
+#!/usr/bin/perl -w
+#
+# Copyright (C) 2006-2009 Nexenta Systems, Inc.
+# All rights reserved.
+#
+
+#
+# use
+#
+use File::Basename;
+
+use NZA::Common;
+use strict;
+
+#
+# vars
+#
+my $pathname;
+my ( $recursive, $delete, $quarantine );
+
+##################################################
+# 
+##################################################
+
+#
+# USAGE
+#
+unless (scalar @ARGV) {
+	print <<EOF;
+Usage: $0 pathname
+
+   pathname  	- the actual pathname of the script to execute
+
+EOF
+	exit 1;
+}
+
+($pathname) = @ARGV;
+
+#
+# runner init 
+#
+my $rc = nms_runner_init($pathname,
+			 flags => $NZA::RFLAG_USE_INIT_PARAMS,
+			 tunables    => {
+			 });
+
+
+exit 1 if ($rc != 0);
+
+eval {
+	nms_runner_trace("EVAL: plugin call to clamscan & ${pathname}");
+	my $lines = &NZA::plugin('nms-clamav-antivirus')->clamscan(
+			'',
+			$pathname,
+			defined( $recursive ),
+			defined( $delete ),
+			defined( $quarantine )
+			);
+
+	foreach my $line ( @$lines ) {
+		nms_runner_trace("$line");
+	}
+
+}; if (nms_catch($@)) {
+	nms_runner_trace("FAILURE: $@");
+}
+
+#
+# terminate
+#
+
+nms_runner_term($pathname);
+
+# SUCCESS
+exit 0;

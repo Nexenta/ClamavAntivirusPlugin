@@ -378,9 +378,20 @@ sub freshclam {
 sub clamscan {
 	my ($self, $vol, $folder, $recursive, $delete, $quarantine) = @_;
 	my $zname = "$vol/$folder";
-	my $fc = $NZA::server_obj->get_impl_object('folder');
-	my $fol = $fc->get_object($zname);
-	my $mp = $fol->mountpoint();
+	my $mp;
+	if ( $zname =~ m|^/| ) {
+		#
+		# clamscan('','/export/home/')
+		#
+		$mp = $folder;
+	} else {
+		#
+		# clamscan('tank', 'users/mike')
+		#
+		my $fc = $NZA::server_obj->get_impl_object('folder');
+		my $fol = $fc->get_object($zname);
+		$mp = $fol->mountpoint();
+	}
 	my $params = '';
 
 	$params .= " -r" if $recursive;
@@ -528,6 +539,20 @@ sub is_vscan_enabled {
 	return 0;
 }
 
+#
+# wrapper for '/Root/Runner/ClamRunner
+#
+sub schedule_create {
+	my ($self, $pathname, $params, $tunables) = @_;
+	$NZA::server_obj->{runner}->{clamav_runner}->create($pathname, $params, $tunables);
+}
+
+sub schedule_destroy {
+	my ($self, $pathname) = @_;
+	$NZA::server_obj->{runner}->{clamav_runner}->destroy($pathname);
+}
+
+
 #############################################################################
 package NZA::ClamAVIPC;
 #############################################################################
@@ -535,9 +560,33 @@ package NZA::ClamAVIPC;
 use strict;
 use base qw(NZA::ObjectIPC);
 use Net::DBus::Exporter qw(com.nexenta.nms.ClamAV);
+use NZA::ClamRunner;
 
-my %props = ();
+my %props = (
+	#
+	# TODO: add here vscan prop and other if it needed
+	# try play with it
+	#
+);
 my %methods = (
+	#
+	# wrapper for '/Root/Runner/ClamRunner
+	#
+	schedule_create	=> {
+		# pathname, params, tunables
+		proto => "['string', ['dict', 'string', 'string'], ['dict', 'string', 'string']], []",
+		access => $NZA::API_WRITE.$NZA::API_DELEGATE_IMPL,
+	},
+
+	schedule_destroy => {
+		# pathname
+		proto => "['string'], []",
+		access => $NZA::API_WRITE.$NZA::API_DELEGATE_IMPL,
+	},
+
+	#
+	# TODO: vscan prop, need to be moved to Volume.pm & Folder.pm
+	#
 	set_vscan_value => {
 
 		proto => "['string', 'string', 'string'], []",
@@ -556,6 +605,9 @@ my %methods = (
 		access => $NZA::API_DELEGATE_IMPL,
 	},
 
+	#
+	# Engine
+	#
 	install_engine => {
 
 		proto => "[], ['bool']",
@@ -568,6 +620,9 @@ my %methods = (
 		access => $NZA::API_DELEGATE_IMPL,
 	},
 
+	#
+	# 
+	#
 	clamscan => {
 
 		proto => "['string', 'string', 'bool', 'bool', 'bool'], [['array', 'string']]",
@@ -624,6 +679,13 @@ sub new {
 	my $object = new NZA::ClamAVObject( $parent );
 	my $self = $class->SUPER::new( 'ClamAV', $parent, $object,
 		\%props, \%methods );
+
+	#
+	# /Root/Runner/ClamRunner
+	#
+	my $runner = $NZA::server_obj->{runner};
+	my $runner_container = $NZA::server_obj->get_impl_object('runner');
+	$runner->{clamav_runner} = new NZA::ClamRunnerIPC( $runner, $runner_container );
 
 	bless $self, $class;
 

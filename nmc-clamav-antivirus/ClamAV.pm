@@ -37,6 +37,9 @@ use Data::Dumper;
 
 ##############################  variables  ####################################
 
+my $verb_runner = 'clamav-scan';
+my $CLAMAV_RUNNER_TYPE = 'clamav-scan';
+
 my $verb	= 'clamav-antivirus';
 my $prop_name	= 'vscan';
 
@@ -92,6 +95,71 @@ my %setup_clamav_folder_words = (
 		_recompute => \&NMC::Builtins::Show::show_fs_unknown_and_syspool,
 		# TODO: need a design, [?folder?] disable/enbable/show [?folder?]
 		#show => \&bi_show,
+	},
+);
+
+my %runner_action =
+(
+	_help => ["#lastword# the #secondword#"],
+	_enter => \&NMC::Builtins::Setup::runner_action_all,
+	_usage => \&NMC::Builtins::Setup::runner_action_all_usage,
+);
+
+my %runner_words =
+(
+	_help => ["Show #lastword#s"],
+	_enter => \&NMC::Builtins::Show::show_all_runners,
+	$NMC::all => {
+		_enter => \&NMC::Builtins::Show::show_all_runners,
+		_usage => \&NMC::Builtins::Show::show_all_runners_usage,
+	},
+	_unknown => {
+		_help => ["#secondword#: show summary and details"],
+		_enter => \&NMC::Builtins::Show::show_runner,
+		_usage => \&NMC::Builtins::Show::show_runner_usage,
+		_recompute => \&NMC::Builtins::Show::show_runner_unknown, 
+	},
+);
+
+my %clam_runner_words =
+(
+	_help => ["Enable, disable, and run appliance #lastword#s"],
+	show => \&bi_show,
+
+	disable    => \%runner_action,
+	enable     => \%runner_action,
+	$NMC::run_now  => \%runner_action,
+	# 'reset'     => \%runner_reset_action,
+
+	_unknown => {
+		_help => ["Enable, disable, and run #secondword# '#lastword#'"],
+		show => \&bi_show,
+		_recompute => \&NMC::Builtins::Show::show_runner_unknown, 
+		disable    => \%runner_action,
+		enable     => \%runner_action,
+		$NMC::run_now  => \%runner_action,
+
+		# $NMC::PROPERTY => \%runner_property,
+
+		destroy => {
+			_enter => \&clam_runner_destroy,
+			# _usage => \&clam_runner_destroy_usage,
+		},
+		# evaluate => {
+			# _enter => \&clam_runner_evaluate,
+			# _usage => \&clam_runner_evaluate_usage,
+		# },
+	},
+
+	create => { 
+		_enter => \&clam_runner_create,
+		$NMC::FOLDER => {
+			_unknown => {
+				_enter => \&clam_runner_create,
+				_recompute => \&NMC::Builtins::Show::show_fs_unknown_and_syspool,
+			},
+		},
+		# _usage => \&clam_runner_create_usage,
 	},
 );
 
@@ -172,6 +240,9 @@ sub construct {
 
 	$show_words->{$verb} = \%show_clamav_words;
 	$setup_words->{$verb} = \%setup_clamav_words;
+
+	$show_words->{$verb_runner} = \%runner_words;
+	$setup_words->{$verb_runner} = \%clam_runner_words;
 
 	$NMC::RESERVED{$verb} = 1;
 }
@@ -734,6 +805,115 @@ In this file please edit parameters beginning with ^srv_clamav.*
 
 
 EOF
+}
+
+sub __clam_runner_create
+{
+	my ($h, @path) = @_;
+
+	eval {
+		&NZA::plugin('nms-clamav-antivirus')->test_internal();
+	}; if (nms_catch($@)) {
+		nms_print_error($@);
+		return 1;
+	}
+
+	# NMC::Builtins::Show::show_runner($h, $CLAMAV_RUNNER_TYPE, '-v'); #drop error ((((
+}
+
+sub clam_runner_create
+{
+	my ($h, @path) = @_;
+	# my( $recursive, $delete, $quarantine ) = &NMC::Util::get_optional('rdq:', \@path);
+	&Data::Dumper::Dumpp([@path]);
+	my ($folder, $vol) = __zfs_set_vscan_get_args(\@path);
+	my ($pathname, $type, $period, $day_within_period, $time_within_day) =
+		NMC::Util::get_optional('n:i:p:D:T:', \@path);
+	if ( defined( $folder ) && defined( $vol ) ) {
+		my $zname = "$vol/$folder";
+		$pathname = &NZA::folder->get_child_prop($zname, 'mountpoint');
+	}
+
+	my $field_size = 10;
+
+	return 0 if (!NMC::Util::input_field(
+			'path',
+			$field_size,
+			"A fully qualified path of a custom directory to scan (examples: 'tank/users/mike', '/var/tmp/'). The directory must exist at this point.",
+			\$pathname,
+			cmdopt => 'n:'));
+
+
+	if (&NZA::runner->object_exists($pathname)) {
+		print_error("$CLAMAV_RUNNER_TYPE '$pathname' object already exists\n");
+		return 0;
+	}
+
+	if (! -d $pathname) {
+		print_error("The directory '$pathname' does not exist.\n");
+		return 0;
+	}
+	
+	# schedule in units
+	$type = NMC::Builtins::Setup::input_field_ival_type( $type, $field_size, $CLAMAV_RUNNER_TYPE, $NZA::hourly, 'i:');
+	return 0 unless ( defined $type );
+		
+	# 
+	# period
+	# 
+	my ( $units, $default_period ) = NMC::Builtins::Setup::ivaltype_to_units_period( $type );
+       	return 0 if (!NMC::Builtins::Setup::input_field_period($type, "period", $field_size,
+					 "Period of time$units between automatic '$CLAMAV_RUNNER_TYPE' runs",
+					 \$period,
+					 $default_period,
+					 'p:'));
+	
+	my ($day, $hour, $minute) = NMC::Builtins::Setup::input_field_day_time($CLAMAV_RUNNER_TYPE,
+							 $type,
+							 $day_within_period,
+							 $time_within_day,
+							 $field_size,
+							 'D:', 'T:');
+	return 0 unless (defined $day);
+
+	# do create
+	my ($params, $tunables) = ({}, {});
+	$params->{type} = $CLAMAV_RUNNER_TYPE;
+	$params->{flags} = 0;   		# TODO: add capability to define flags via UI
+	$params->{description} = "create clamav-scan test"; # FIXME: = $params->{info}
+	$params->{trace_level} = $NZA::TRACE_LEVEL;
+	$params->{freq_type} = $type;
+	$params->{freq_period} = $period;
+	$params->{freq_minute} = $minute;
+	$params->{freq_hour} = $hour;
+	$params->{freq_day} = $day;
+
+	eval {
+		&NZA::plugin('nms-clamav-antivirus')->schedule_create($pathname, $params, $tunables);
+	}; if (nms_catch($@)) {
+		nms_print_error($@);
+		return 1;
+	}
+
+	NMC::Builtins::Show::show_runner($h, $CLAMAV_RUNNER_TYPE, $pathname, '-v');
+}
+
+sub clam_runner_destroy
+{
+	my ($h, @path) = @_;
+	my ($yes) = NMC::Util::get_optional('y', \@path);
+	my ($name) = NMC::Util::names_to_values_from_path(\@path, $CLAMAV_RUNNER_TYPE);
+
+	if (! $yes) {
+		return unless (&NMC::Util::input_confirm("Destroy $CLAMAV_RUNNER_TYPE '$name'?"));
+	}
+	eval {
+		&NZA::plugin('nms-clamav-antivirus')->schedule_destroy($name);
+	}; if (nms_catch($@)) {
+		nms_print_error($@);
+		return 1;
+	}
+	print_out("$CLAMAV_RUNNER_TYPE '$name' destroyed\n");
 }
 
 1;

@@ -41,13 +41,6 @@ my $verb_runner = 'clamav-scan';
 my $CLAMAV_RUNNER_TYPE = 'clamav-scan';
 
 my $verb	= 'clamav-antivirus';
-my $prop_name	= 'vscan';
-
-my $engine_name = 'avscan';
-
-my $cmd_avadm	= 'vscanadm';
-my $cmd_avfresh	= 'freshclam';
-my $cmd_avscan	= 'clamscan';
 
 my $cfg_avfresh = '/etc/clamav/freshclam.conf';
 my $cfg_avcicap = '/etc/c-icap.conf';
@@ -105,22 +98,6 @@ my %runner_action =
 	_usage => \&NMC::Builtins::Setup::runner_action_all_usage,
 );
 
-my %runner_words =
-(
-	_help => ["Show #lastword#s"],
-	_enter => \&NMC::Builtins::Show::show_all_runners,
-	$NMC::all => {
-		_enter => \&NMC::Builtins::Show::show_all_runners,
-		_usage => \&NMC::Builtins::Show::show_all_runners_usage,
-	},
-	_unknown => {
-		_help => ["#secondword#: show summary and details"],
-		_enter => \&NMC::Builtins::Show::show_runner,
-		_usage => \&NMC::Builtins::Show::show_runner_usage,
-		_recompute => \&NMC::Builtins::Show::show_runner_unknown, 
-	},
-);
-
 my %clam_runner_words =
 (
 	_help => ["Enable, disable, and run appliance #lastword#s"],
@@ -129,7 +106,7 @@ my %clam_runner_words =
 	disable    => \%runner_action,
 	enable     => \%runner_action,
 	$NMC::run_now  => \%runner_action,
-	# 'reset'     => \%runner_reset_action,
+	# 'reset'     => \%runner_reset_action, # reset to default settings we not supported yet
 
 	_unknown => {
 		_help => ["Enable, disable, and run #secondword# '#lastword#'"],
@@ -139,27 +116,22 @@ my %clam_runner_words =
 		enable     => \%runner_action,
 		$NMC::run_now  => \%runner_action,
 
-		# $NMC::PROPERTY => \%runner_property,
-
 		destroy => {
 			_enter => \&clam_runner_destroy,
-			# _usage => \&clam_runner_destroy_usage,
+			_usage => \&clam_runner_destroy_usage,
 		},
-		# evaluate => {
-			# _enter => \&clam_runner_evaluate,
-			# _usage => \&clam_runner_evaluate_usage,
-		# },
 	},
 
 	create => { 
 		_enter => \&clam_runner_create,
-		$NMC::FOLDER => {
+		# TODO: check if it need to add here a 'volume' verb
+		# $NMC::FOLDER => { # XXX: can't use with ^create ...
 			_unknown => {
 				_enter => \&clam_runner_create,
 				_recompute => \&NMC::Builtins::Show::show_fs_unknown_and_syspool,
 			},
-		},
-		# _usage => \&clam_runner_create_usage,
+		# },
+		_usage => \&clam_runner_create_usage,
 	},
 );
 
@@ -241,10 +213,13 @@ sub construct {
 	$show_words->{$verb} = \%show_clamav_words;
 	$setup_words->{$verb} = \%setup_clamav_words;
 
-	$show_words->{$verb_runner} = \%runner_words;
+	$show_words->{$verb_runner} = $show_words->{$NZA::RUNNER_SCRIPT};
 	$setup_words->{$verb_runner} = \%clam_runner_words;
+	$setup_words->{$verb_runner}->{_unknown}->{$NMC::PROPERTY} =
+		$setup_words->{$NZA::RUNNER_SCRIPT}->{_unknown}->{$NMC::PROPERTY};
 
 	$NMC::RESERVED{$verb} = 1;
+	$NMC::RESERVED{$verb_runner} = 1;
 }
 
 ############################## Setup Command ####################################
@@ -364,51 +339,42 @@ Examples:
 To show information about last antivirus database update:
 ${prompt}show clamav-antivirus update
 
-Received signal: wake up
-ClamAV update process started at Tue Oct 27 17:00:14 2009
-main.cvd is up to date (version: 51, sigs: 540, f-level: 42, builder: sven)
-daily.cld is up to date (version: 99, sigs: 930, f-level: 43, builder: ccordes)
+  Received signal: wake up
+  ClamAV update process started at Tue Oct 27 17:00:14 2009
+  main.cvd is up to date (version: 51, sigs: 540, f-level: 42, builder: sven)
+  daily.cld is up to date (version: 99, sigs: 930, f-level: 43, builder: ccordes)
 
 
 To show currently settings of vscan engine, freshclam and c-icap
 ${prompt}show clamav-antivirus show-settings
 
-max-size=10MB
-max-size-action=allow
-types=+*
-
-avscan:enable=on
-avscan:host=localhost
-avscan:port=1344
-avscan:max-connection=32
-
-srv_clamav.MaxObjectSize 10M
-srv_clamav.ClamAvMaxFilesInArchive 0
-srv_clamav.ClamAvMaxFileSizeInArchive 100M
-srv_clamav.ClamAvMaxRecLevel 5
-Checks 24
-DatabaseMirror db.local.clamav.net
-DatabaseMirror database.clamav.net
+  Checks = 24
+  DatabaseMirror = database.clamav.net
+  max-size = 11Mb
+  srv_clamav.ClamAvMaxFileSizeInArchive = 100M
+  srv_clamav.ClamAvMaxFilesInArchive = 0
+  srv_clamav.ClamAvMaxRecLevel = 5
+  srv_clamav.MaxObjectSize = 10M
 
 
 To check the volumes and folders with "on access" vscan engine enabled/disabled:
 ${prompt}show clamav-antivirus vscan -a
 
-tank/share on
-tank/home on
-tank/video off
-tank/music off
+  NAME        VSCAN
+  tank/share  on
+  tank/home   on
+  tank/video  off
+  tank/music  off
 
 
 To check if c-icap can detect the infected files and all services are online
 ${prompt}show clamav-antivirus -c -q
 
-STATE STIME FMRI
-online Oct_22 svc:/application/clamfresh:default
-online Oct_22 svc:/application/cicap:default
-online Oct_22 svc:/application/clamd:default
-online Oct_22 svc:/system/filesystem/vscan:icap
-C-ICAP: service check OK.
+  === AntiVirus services status ===
+  cicap: online
+  vscan: online
+  clamfresh: online
+  C-ICAP: service check OK.
 
 EOF
 }
@@ -550,15 +516,18 @@ ${prompt}setup clamav-antivirus vscan volume tank enable
 To scan any Folder for viruses manually:
 ${prompt}setup clamav-antivirus scan folder tank/incoming
 
------------ SCAN SUMMARY -----------
-Known viruses: 637439
-Engine version: 0.95.2
-Scanned directories: 1
-Scanned files: 0
-Infected files: 0
-Data scanned: 0.00 MB
-Data read: 0.00 MB (ratio 0.00:1)
-Time: 6.969 sec (0 m 6 s)
+  /volumes/file1: Empty file
+  /volumes/file2: OK
+  /volumes/eicar: ClamAV-Test-File FOUND
+  ----------- SCAN SUMMARY -----------
+  Known viruses: 637439
+  Engine version: 0.95.2
+  Scanned directories: 1
+  Scanned files: 0
+  Infected files: 0
+  Data scanned: 0.00 MB
+  Data read: 0.00 MB (ratio 0.00:1)
+  Time: 6.969 sec (0 m 6 s)
 
 
 To scan Folder recursively and remove infected files:
@@ -567,14 +536,17 @@ ${prompt}setup clamav-antivirus scan folder tank/incoming -r -d
 To check for newest antivirus databases in Internet manually:
 ${prompt}setup clamav-antivirus update
 
-ClamAV update process started at Tue Oct 27 17:00:14 2009
-main.cvd is up to date (version: 51, sigs: 540, f-level: 42, builder: sven)
-daily.cld is up to date (version: 99, sigs: 930, f-level: 43, builder: ccordes)
+  ClamAV update process started at Tue Oct 27 17:00:14 2009
+  main.cvd is up to date (version: 51, sigs: 540, f-level: 42, builder: sven)
+  daily.cld is up to date (version: 99, sigs: 930, f-level: 43, builder: ccordes)
 
 
 By default antivirus databases update proceed automatically,
 you can change it by editing config file of "freshclam"
 ${prompt}setup clamav-antivirus edit-settings freshclam
+
+or disable clamfresh service
+${prompt}setup network service clamfresh disable
 
 
 EOF
@@ -701,9 +673,13 @@ sub setup_clamav_antivirus_update
 sub setup_clamav_antivirus_scan
 {
 	my ($h, @path) = @_;
-	my( $recursive, $delete, $quarantine ) = &NMC::Util::get_optional('rdq:', \@path);
+	my( $yes, $recursive, $delete, $quarantine ) = &NMC::Util::get_optional('yrdq:', \@path);
 	my ($folder, $vol) = __zfs_set_vscan_get_args(\@path);
 	my $lines;
+
+	if (!$yes && !&NMC::Util::input_confirm("This operation may take some time. Proceed?")) {
+		return 0;
+	}
 
 	if ( defined( $folder ) && defined( $vol ) ) {
 
@@ -713,7 +689,7 @@ sub setup_clamav_antivirus_scan
 				$folder,
 				defined( $recursive ),
 				defined( $delete ),
-				defined( $quarantine )
+				defined( $quarantine ) ? NMC::Util::abs_path($quarantine) : ''
 				);
 		}; if( nms_catch( $@ ) ) {
 			nms_print_error( $@ );
@@ -807,28 +783,80 @@ In this file please edit parameters beginning with ^srv_clamav.*
 EOF
 }
 
-sub __clam_runner_create
+sub clam_runner_create_usage
 {
-	my ($h, @path) = @_;
+	my ($cmdline, $prompt, @path) = @_;
 
-	eval {
-		&NZA::plugin('nms-clamav-antivirus')->test_internal();
-	}; if (nms_catch($@)) {
-		nms_print_error($@);
-		return 1;
-	}
+	my ($name) = NMC::Util::names_to_values_from_path(\@path, $CLAMAV_RUNNER_TYPE);
+	my @type_arr = @NMC::ival_type_arr;
 
-	# NMC::Builtins::Show::show_runner($h, $CLAMAV_RUNNER_TYPE, '-v'); #drop error ((((
+	my $interval;
+	$interval = join('|', @type_arr);
+
+	print_out <<EOF;
+$cmdline
+Usage:	[-n path]
+	[-i interval] [-p period] [-D day] [-T time]
+	[-d]
+	[-r]
+	[-q directory]
+	[-y]
+
+  -n <path>		A fully qualified filename or directory for
+			virus scaning, periodically.
+
+  -i <interval>		Time interval, one of the following
+			enumerated values:
+  			$interval
+
+  -p <period>		One or more "time intervals" (above). For
+			instance, an hourly service with a period
+			equal 4 will run every 4 hours.
+
+  -T <time of day>	Time of the day (e.g.: 3am, 6:45pm)
+
+  -D <day of the month>	Day of the month (1..31)
+
+  -d			Erase infected files. Be careful!
+
+  -r			Scan subdirectories recursively.
+
+  -q <directory>	A fully qualified quarantine directory for
+			move infected files.
+
+  -y			Skip confirmation dialog by automatically
+			responding Yes
+
+Destroy the specified $CLAMAV_RUNNER_TYPE.
+
+
+See also: 'show $CLAMAV_RUNNER_TYPE'
+See also: 'setup $CLAMAV_RUNNER_TYPE'
+
+See also: 'show $CLAMAV_RUNNER_TYPE $name'
+See also: 'setup $CLAMAV_RUNNER_TYPE $name destroy'
+See also: 'setup $CLAMAV_RUNNER_TYPE $name disable'
+See also: 'setup $CLAMAV_RUNNER_TYPE $name enable'
+See also: 'setup $CLAMAV_RUNNER_TYPE $name property'
+See also: 'setup $CLAMAV_RUNNER_TYPE $name run'
+
+See also: 'help runners'
+
+EOF
 }
 
 sub clam_runner_create
 {
 	my ($h, @path) = @_;
-	# my( $recursive, $delete, $quarantine ) = &NMC::Util::get_optional('rdq:', \@path);
-	&Data::Dumper::Dumpp([@path]);
+
+	# TODO: yes and no for all questions
+	my ($yes, $pathname, $type, $period, $day_within_period, $time_within_day, $recursive, $delete, $quarantine) =
+		NMC::Util::get_optional('yn:i:p:D:T:rdq:', \@path);
+
+	#
+	# pathname = mountpoint(qw/volume tank folder user/)
+	#
 	my ($folder, $vol) = __zfs_set_vscan_get_args(\@path);
-	my ($pathname, $type, $period, $day_within_period, $time_within_day) =
-		NMC::Util::get_optional('n:i:p:D:T:', \@path);
 	if ( defined( $folder ) && defined( $vol ) ) {
 		my $zname = "$vol/$folder";
 		$pathname = &NZA::folder->get_child_prop($zname, 'mountpoint');
@@ -844,17 +872,30 @@ sub clam_runner_create
 			cmdopt => 'n:'));
 
 
-	if (&NZA::runner->object_exists($pathname)) {
-		print_error("$CLAMAV_RUNNER_TYPE '$pathname' object already exists\n");
-		return 0;
-	}
-
-	if (! -d $pathname) {
-		print_error("The directory '$pathname' does not exist.\n");
+	#
+	# directory or file or link (-d -f -l)
+	#
+	unless ( -d $pathname || -f $pathname || -l $pathname ) {
+		print_error( "The directory or file '${pathname}' does not exists.\n" );
 		return 0;
 	}
 	
+	#
+	# correct user input pathname
+	#
+	$pathname = NMC::Util::abs_path($pathname);
+
+	#
+	# drop if object exists
+	#
+	if (&NZA::runner->object_exists($pathname)) {
+		print_error("$CLAMAV_RUNNER_TYPE '$pathname' object already exists.\n");
+		return 0;
+	}
+
+	#
 	# schedule in units
+	#
 	$type = NMC::Builtins::Setup::input_field_ival_type( $type, $field_size, $CLAMAV_RUNNER_TYPE, $NZA::hourly, 'i:');
 	return 0 unless ( defined $type );
 		
@@ -868,6 +909,9 @@ sub clam_runner_create
 					 $default_period,
 					 'p:'));
 	
+	#
+	# if selected perion qw/week month year/
+	#
 	my ($day, $hour, $minute) = NMC::Builtins::Setup::input_field_day_time($CLAMAV_RUNNER_TYPE,
 							 $type,
 							 $day_within_period,
@@ -876,17 +920,42 @@ sub clam_runner_create
 							 'D:', 'T:');
 	return 0 unless (defined $day);
 
+	$recursive = ($recursive) ? $recursive : ( $yes ? 1 : &NMC::Util::input_confirm("Scan subdirectories recursively.") );
+	$delete = ($delete) ? $delete : ( $yes ? 1 : &NMC::Util::input_confirm("Erase infected files. Be careful!") );
+	NMC::Util::input_field(
+		'path',
+		$field_size,
+		"Move infected files into quarantine directory.",
+		\$quarantine,
+		cmdopt => 'q:',
+		"empty-ok" => 1);
+
+	$quarantine = undef if $quarantine =~ /^\s*$/;
+	if ( defined( $quarantine ) && ( ! -d $quarantine ) ) {
+		print_error( "The directory '${quarantine}' does not exists.\n" ) ;
+		return 0;
+	}
+	$quarantine = NMC::Util::abs_path($quarantine) if defined $quarantine;
+
 	# do create
 	my ($params, $tunables) = ({}, {});
-	$params->{type} = $CLAMAV_RUNNER_TYPE;
-	$params->{flags} = 0;   		# TODO: add capability to define flags via UI
-	$params->{description} = "create clamav-scan test"; # FIXME: = $params->{info}
-	$params->{trace_level} = $NZA::TRACE_LEVEL;
-	$params->{freq_type} = $type;
-	$params->{freq_period} = $period;
-	$params->{freq_minute} = $minute;
-	$params->{freq_hour} = $hour;
-	$params->{freq_day} = $day;
+
+	$params = {
+		type		=> $CLAMAV_RUNNER_TYPE,
+		flags		=> 0,
+		description	=> "Scan for Viruses (ClamAV)",
+		trace_level	=> $NZA::TRACE_LEVEL,
+		freq_type	=> $type,
+		freq_period	=> $period,
+		freq_minute	=> $minute,
+		freq_hour	=> $hour,
+		freq_day	=> $day,
+	};
+	$tunables = {
+		recursive	=> $recursive,
+		erase		=> $delete,
+		quarantine	=> $quarantine,
+	};
 
 	eval {
 		&NZA::plugin('nms-clamav-antivirus')->schedule_create($pathname, $params, $tunables);
@@ -895,16 +964,44 @@ sub clam_runner_create
 		return 1;
 	}
 
-	NMC::Builtins::Show::show_runner($h, $CLAMAV_RUNNER_TYPE, $pathname, '-v');
+	NMC::Builtins::Show::show_runner($h, $CLAMAV_RUNNER_TYPE, $pathname, '-a');
+}
+
+sub clam_runner_destroy_usage
+{
+	my ($cmdline, $prompt, @path) = @_;
+
+	my ($name) = NMC::Util::names_to_values_from_path(\@path, $CLAMAV_RUNNER_TYPE);
+	print_out <<EOF;
+$cmdline
+Usage: [-y] 
+
+  -y	Skip confirmation dialog by automatically responding Yes
+
+Destroy the specified $CLAMAV_RUNNER_TYPE.
+
+
+See also: 'show $CLAMAV_RUNNER_TYPE'
+See also: 'setup $CLAMAV_RUNNER_TYPE'
+
+See also: 'show $CLAMAV_RUNNER_TYPE $name'
+See also: 'setup $CLAMAV_RUNNER_TYPE $name disable'
+See also: 'setup $CLAMAV_RUNNER_TYPE $name enable'
+See also: 'setup $CLAMAV_RUNNER_TYPE $name property'
+See also: 'setup $CLAMAV_RUNNER_TYPE $name run'
+
+See also: 'help runners'
+
+EOF
 }
 
 sub clam_runner_destroy
 {
 	my ($h, @path) = @_;
-	my ($yes) = NMC::Util::get_optional('y', \@path);
+	my ($yes)  = NMC::Util::get_optional('y', \@path);
 	my ($name) = NMC::Util::names_to_values_from_path(\@path, $CLAMAV_RUNNER_TYPE);
 
-	if (! $yes) {
+	if ( ! $yes ) {
 		return unless (&NMC::Util::input_confirm("Destroy $CLAMAV_RUNNER_TYPE '$name'?"));
 	}
 	eval {

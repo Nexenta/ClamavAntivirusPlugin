@@ -13,10 +13,19 @@ use NZA::Common;
 use strict;
 
 #
+# tunables
+#
+my ( $recursive, $erase, $quarantine );
+
+#
+# Unique per-trigger fault IDs
+#
+my $FAULT_ID_VIRUS = 1;
+
+#
 # vars
 #
 my $pathname;
-my ( $recursive, $delete, $quarantine );
 
 ##################################################
 # 
@@ -29,13 +38,14 @@ unless (scalar @ARGV) {
 	print <<EOF;
 Usage: $0 pathname
 
-   pathname  	- the actual pathname of the script to execute
+   pathname  	- actual path of the directory for virus scanning
 
 EOF
 	exit 1;
 }
 
 ($pathname) = @ARGV;
+#nms_runner_trace("@ARGV\n");
 
 #
 # runner init 
@@ -43,27 +53,57 @@ EOF
 my $rc = nms_runner_init($pathname,
 			 flags => $NZA::RFLAG_USE_INIT_PARAMS,
 			 tunables    => {
+			 	recursive => \$recursive,
+			 	recursive_shortdesc => "0 | 1. Scan subdirectories recursively.",
+				# recursive_longdesc => "Scan subdirectories recursively.",
+			 	erase => \$erase,
+			 	erase_shortdesc => "0 | 1. Erase infected files. Be careful!",
+				# erase_longdesc => "Erase infected files. Be careful!",
+			 	quarantine => \$quarantine,
+			 	quarantine_shortdesc => "Move infected files into quarantine directory.",
+				# quarantine_longdesc => "Move infected files into quarantine directory.",
 			 });
 
 
 exit 1 if ($rc != 0);
 
 eval {
-	nms_runner_trace("EVAL: plugin call to clamscan & ${pathname}");
+	# nms_runner_trace("ClamAV: plugin call to clamscan & ${pathname}");
 	my $lines = &NZA::plugin('nms-clamav-antivirus')->clamscan(
 			'',
 			$pathname,
-			defined( $recursive ),
-			defined( $delete ),
-			defined( $quarantine )
+			( $recursive ),
+			( $erase ),
+			( $quarantine =~ /^\s*$/ ) ? '' : $quarantine
 			);
 
+	my @viruses = ();
 	foreach my $line ( @$lines ) {
+		nms_runner_trace($NZA::TRACE_LEVEL_VVV, "$line");
+		push @viruses, $1 if $line =~ /^(.+)\s+FOUND$/;
+	}
+	foreach my $line ( @viruses ) {
 		nms_runner_trace("$line");
 	}
 
+	# XXX: isa(NZA::Trigger)
+	# if (scalar @viruses) {
+		# my %fault = (id => $FAULT_ID_VIRUS,
+			     # level => $NZA::TRIGGER_ALARM,
+			     # max_fail => 1,
+			     # severity => $NZA::SEVERITY_NOTICE,
+			     # description => join( "\n", @viruses ));
+		# eval {
+			# &NZA::trigger->fault($pathname, \%fault);
+		# }; if (nms_catch($@)) {
+			# nms_runner_trace("FATAL: failed to report a fault: $@");
+		# }
+	# }
+
 }; if (nms_catch($@)) {
 	nms_runner_trace("FAILURE: $@");
+	#TODO: and stop service, and report fault?
+	#change state of runner?
 }
 
 #

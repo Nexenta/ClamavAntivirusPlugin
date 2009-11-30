@@ -378,12 +378,14 @@ sub freshclam {
 sub clamscan {
 	my ($self, $vol, $folder, $recursive, $delete, $quarantine) = @_;
 	my $zname = "$vol/$folder";
-	my $mp;
+	my $mp; # mountpoint
+
 	if ( $zname =~ m|^/| ) {
 		#
 		# clamscan('','/export/home/')
+		# clamscan('','vol1/a2')
 		#
-		$mp = $folder;
+		$mp = ( $folder =~ m|^/| ) ? $folder : "${NZA::VOLROOT}/${folder}";
 	} else {
 		#
 		# clamscan('tank', 'users/mike')
@@ -392,25 +394,62 @@ sub clamscan {
 		my $fol = $fc->get_object($zname);
 		$mp = $fol->mountpoint();
 	}
+
+	#
+	# check $mp for exists or raise error
+	#
+	die new NZA::Exception($Exception::ObjectNotFound, "Directory or file ${mp} not found") unless ( -d $mp || -f $mp || -l $mp );
+	#
+	# check $quarantine for exists or raise error
+	#
+	die new NZA::Exception($Exception::ObjectNotFound, "Quarantine directory ${quarantine} not found") if $quarantine && ! ( -d $quarantine );
+
 	my $params = '';
 
-	$params .= " -r" if $recursive;
-	$params .= " --remove=yes" if $delete;
+	$params .= " -r"		 if $recursive;
+	$params .= " --remove=yes"	 if $delete;
 	$params .= " --move=$quarantine" if $quarantine;
 
 	my @lines = ();
+	my @viruses = ();
 	my $retval = nza_exec("$NZA::ClamAV::CMD_CLAMSCAN $params $mp", \@lines);
 
 	if ( $retval == 256 ) {
 
-		TRACE("ClamAV: !ALERT! in $zname VIRUS found!");
+		# TODO: parse output and report fault
+		for my $line (@lines) {
+			# ( $pathname, $virusname ) = ($line =~ /^(.+):\s+(\S+)\s+FOUND$/);
+			push @viruses, $1 if $line =~ /^(.+)\s+FOUND$/;
+		}
+		# TRACE("ClamAV: Viruses Found");
+		# map { TRACE("ClamAV: ${_}"); $_ } @viruses if scalar @viruses;
+
+		#
+		# log it
+		#
+		$NZA::server_obj->append_log( "ClamAV: Viruses Found", \@viruses );
+
+		#
+		# broadcast it
+		#
+		my $timestamp = localtime();
+		my %evt_broadcast_props = (
+			type => 'clamav-scan',
+			name => 'ClamAV: Viruses Found',
+			'time' => $timestamp,
+			description  => join( "\n", @viruses ),
+		);
+		$NZA::server_obj->event_broadcast(\%evt_broadcast_props);
 
 	} elsif ( $retval != 0 ) {
 
-		die new NZA::Exception($Exception::SystemCallError, "Error run clamscan ");
+		# retval:512 quarantine folder not exists
+		# retval:14336 if WARNING: Can't access file No such file or directory
+		die new NZA::Exception($Exception::SystemCallError, "Error run $NZA::ClamAV::CMD_CLAMSCAN $params $mp retval:$retval output: @lines");
 	}
 
 	@lines = map { chomp($_); "$_\n" } @lines;
+
 	return \@lines;
 }
 
@@ -569,6 +608,7 @@ my %props = (
 	# try play with it
 	#
 );
+
 my %methods = (
 	#
 	# wrapper for '/Root/Runner/ClamRunner
@@ -626,7 +666,7 @@ my %methods = (
 	#
 	clamscan => {
 
-		proto => "['string', 'string', 'bool', 'bool', 'bool'], [['array', 'string']]",
+		proto => "['string', 'string', 'bool', 'bool', 'string'], [['array', 'string']]",
 		access => $NZA::API_DELEGATE_IMPL,
 	},
 
@@ -694,7 +734,6 @@ sub new {
 
 	return $self;
 }
-
 
 1;
 # vim:set sts=0 ts=8 sw=8 noet:

@@ -15,7 +15,7 @@ use strict;
 #
 # tunables
 #
-my ( $recursive, $erase, $quarantine );
+my ( $recursive, $erase, $quarantine, $email );
 
 #
 # Unique per-trigger fault IDs
@@ -26,6 +26,7 @@ my $FAULT_ID_VIRUS = 1;
 # vars
 #
 my $pathname;
+my $CLAMAV_RUNNER_TYPE = 'clamav-scan';
 
 ##################################################
 # 
@@ -62,6 +63,9 @@ my $rc = nms_runner_init($pathname,
 			 	quarantine => \$quarantine,
 			 	quarantine_shortdesc => "Move infected files into quarantine directory.",
 				# quarantine_longdesc => "Move infected files into quarantine directory.",
+				email => \$email,
+				email_shortdesc => "0 | 1. If true (non-zero), generate email notification about found viruses",
+				# email_longdesc => "0 | 1. If true (non-zero), generate email notification about found viruses",
 			 });
 
 
@@ -85,6 +89,7 @@ eval {
 	foreach my $line ( @viruses ) {
 		nms_runner_trace("$line");
 	}
+	_send_email( \@viruses ) if ( scalar @viruses ) and ( $email );
 
 	# XXX: isa(NZA::Trigger)
 	# if (scalar @viruses) {
@@ -114,3 +119,29 @@ nms_runner_term($pathname);
 
 # SUCCESS
 exit 0;
+
+####################################################
+# send email
+####################################################
+ 
+sub _send_email {
+	my %report = ();
+	my $lines = shift;
+	$report{shortname}   = "Viruses are found by $CLAMAV_RUNNER_TYPE '$pathname'";
+	$report{description} = join( "\n", @$lines );
+
+	# my $att = $OUTFILE;
+	# my $base = basename($OUTFILE);
+	# unless ($OUTFILE =~ /\.gz$/) {
+		# $att = "/tmp/$base.gz";
+		# my @lines = ();
+		# if (sysexec("cat $OUTFILE | gzip > $att", \@lines) != 0) {
+			# nms_runner_trace("failed to gzip $OUTFILE: @lines");
+			# return;
+		# }
+	# }
+	# $report{"attachment-$base.gz"} = $att;
+
+	&NZA::reporter->send($pathname, \%report);
+}
+

@@ -850,8 +850,8 @@ sub clam_runner_create
 	my ($h, @path) = @_;
 
 	# TODO: yes and no for all questions
-	my ($yes, $pathname, $type, $period, $day_within_period, $time_within_day, $recursive, $delete, $quarantine) =
-		NMC::Util::get_optional('yn:i:p:D:T:rdq:', \@path);
+	my ($yes, $pathname, $type, $period, $day_within_period, $time_within_day, $recursive, $delete, $quarantine, $email) =
+		NMC::Util::get_optional('yn:i:p:D:T:rdq:e', \@path);
 
 	#
 	# pathname = mountpoint(qw/volume tank folder user/)
@@ -921,7 +921,8 @@ sub clam_runner_create
 	return 0 unless (defined $day);
 
 	$recursive = ($recursive) ? $recursive : ( $yes ? 1 : &NMC::Util::input_confirm("Scan subdirectories recursively.") );
-	$delete = ($delete) ? $delete : ( $yes ? 1 : &NMC::Util::input_confirm("Erase infected files. Be careful!") );
+	$delete    = ($delete)    ? $delete    : ( $yes ? 1 : &NMC::Util::input_confirm("Erase infected files. Be careful!") );
+	$email     = ($email)     ? $email     : ( $yes ? 1 : &NMC::Util::input_confirm("Generate email notification about found viruses?") );
 	NMC::Util::input_field(
 		'path',
 		$field_size,
@@ -955,6 +956,7 @@ sub clam_runner_create
 		recursive	=> $recursive,
 		erase		=> $delete,
 		quarantine	=> $quarantine,
+		email		=> $email,
 	};
 
 	eval {

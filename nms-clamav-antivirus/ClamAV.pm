@@ -420,6 +420,7 @@ sub clamscan {
 		for my $line (@lines) {
 			# ( $pathname, $virusname ) = ($line =~ /^(.+):\s+(\S+)\s+FOUND$/);
 			push @viruses, $1 if $line =~ /^(.+)\s+FOUND$/;
+			# push @viruses, $1 if $line =~ /^(WARNING.*)$/; # XXX ???
 		}
 		# TRACE("ClamAV: Viruses Found");
 		# map { TRACE("ClamAV: ${_}"); $_ } @viruses if scalar @viruses;

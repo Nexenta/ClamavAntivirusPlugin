@@ -60,8 +60,12 @@ my %show_clamav_words =
 	_help => ["Show information about AntiVirus"],
 	_enter => \&show_clamav_antivirus,
 	_usage => \&show_clamav_antivirus_usage,
-	update => \&show_clamav_antivirus_update,
+	update => {
+		_help => ["Last antivirus database update info"],
+		_enter => \&show_clamav_antivirus_update,
+	},
 	vscan => {
+		_help => ["Show all folders with vscan switch on"],
 		_enter => \&show_clamav_antivirus_vscan,
 		_usage => \&show_clamav_antivirus_vscan_usage,
 		$NMC::FOLDER => \%show_clamav_folder_words,
@@ -75,11 +79,14 @@ my %show_clamav_words =
 			},
 		},
 	},
-	'show-settings' => \&show_clamav_antivirus_config,
+	'show-settings' => {
+		_help => ["Show common parameters"],
+		_enter => \&show_clamav_antivirus_config,
+	},
 );
 
 my %setup_clamav_folder_words = (
-	_help => ["Select the folder for vscan scan on/off"],
+	_help => ["Select the folder for vscan on/off"],
 	_unknown => {
 		_enter => \&setup_clamav_antivirus_vscan,
 		enable => \&setup_clamav_antivirus_vscan,
@@ -123,6 +130,7 @@ my %clam_runner_words =
 	},
 
 	create => { 
+		_help => ["#lastword# the #secondword#"],
 		_enter => \&clam_runner_create,
 		# TODO: check if it need to add here a 'volume' verb
 		# $NMC::FOLDER => { # XXX: can't use with ^create ...
@@ -144,22 +152,23 @@ my %setup_clamav_words =
 	_usage => \&setup_clamav_antivirus_usage,
 	'edit-settings' => {
 		show => \&bi_show,
-		_help => ["Configure parameters"],
+		_help => ["Edit configuration files"],
 
 		freshclam => {
+			_help => ["Edit #lastword# configuration file"],
 			_enter => \&setup_clamav_antivirus_config_freshclam,
 			_usage => \&setup_clamav_antivirus_config_freshclam_usage,
-			_help => ["Edit #prevword# configuration file"],
 		},
 		'c-icap' => {
+			_help => ["Edit #lastword# configuration file"],
 			_enter => \&setup_clamav_antivirus_config_cicap,
 			_usage => \&setup_clamav_antivirus_config_cicap_usage,
-			_help => ["Edit #prevword# configuration file"],
 		},
 	},
 	# example "setup appliance nms property"
 	$NMC::PROPERTY => {
 		show => \&show_clamav_antivirus_config,
+		_help => ["Configure common parameters"],
 		_unknown => {
 			_enter => \&setup_clamav_antivirus_property,
 			_recompute => \&setup_clamav_antivirus_property_unknown,
@@ -187,7 +196,8 @@ my %setup_clamav_words =
 		_enter => \&setup_clamav_antivirus_update,
 	},
 	scan => {
-		_help => ["Manual scan ..."],
+		_help => ["Manual scan folder or volume and show report"],
+		_usage => \&setup_clamav_antivirus_scan_usage,
 		$NMC::FOLDER => {
 			_help => ["Select the folder for clamscan folder"],
 			_usage => \&setup_clamav_antivirus_scan_usage,
@@ -800,6 +810,7 @@ Usage:	[-n path]
 	[-d]
 	[-r]
 	[-q directory]
+	[-e]
 	[-y]
 
   -n <path>		A fully qualified filename or directory for
@@ -823,6 +834,12 @@ Usage:	[-n path]
 
   -q <directory>	A fully qualified quarantine directory for
 			move infected files.
+
+  -e			Send email to the appliance's administrator, with
+  			generated notification about found viruses.
+
+			For details on appliance's mailer, please see:
+			'show appliance mailer'
 
   -y			Skip confirmation dialog by automatically
 			responding Yes

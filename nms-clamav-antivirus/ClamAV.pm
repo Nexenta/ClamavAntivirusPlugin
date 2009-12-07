@@ -375,8 +375,28 @@ sub freshclam {
 	return \@lines;
 }
 
+sub _clamscan {
+	my ($self, $params, $mp, $props) = @_;
+	my @lines = ();
+
+	TRACE("ClamAV: nza_frok nice _clamscan $params $mp");
+
+	my $retval = nza_exec("nice $NZA::ClamAV::CMD_CLAMSCAN $params $mp", \@lines);
+
+	if ( $retval == 256 ) {
+
+		$NZA::server_obj->append_log( "ClamAV: Viruses Found", $self->_get_viruses_from_lines( \@lines ) );
+
+		$self->send_email( \@lines, "by clamscan ${mp}", $props ) if $props->{email};
+
+	} elsif ( $retval != 0 ) {
+
+		TRACE("Error run $NZA::ClamAV::CMD_CLAMSCAN $params $mp retval:$retval output: @lines");
+	}
+}
+
 sub clamscan {
-	my ($self, $vol, $folder, $recursive, $delete, $quarantine) = @_;
+	my ($self, $vol, $folder, $props) = @_;
 	my $zname = "$vol/$folder";
 	my $mp; # mountpoint
 
@@ -400,47 +420,50 @@ sub clamscan {
 	#
 	die new NZA::Exception($Exception::ObjectNotFound, "Directory or file ${mp} not found") unless ( -d $mp || -f $mp || -l $mp );
 	#
-	# check $quarantine for exists or raise error
+	# check 'quarantine' for exists or raise error
 	#
-	die new NZA::Exception($Exception::ObjectNotFound, "Quarantine directory ${quarantine} not found") if $quarantine && ! ( -d $quarantine );
+	die new NZA::Exception($Exception::ObjectNotFound, "Quarantine directory " . $props->{quarantine} . " not found") if $props->{quarantine} && ! ( -d $props->{quarantine} );
 
 	my $params = '';
 
-	$params .= " -r"		 if $recursive;
-	$params .= " --remove=yes"	 if $delete;
-	$params .= " --move=$quarantine" if $quarantine;
+	$params .= " -r"		 if $props->{recursive};
+	$params .= " --remove=yes"	 if $props->{erase};
+	$params .= " --move=" . $props->{quarantine} if $props->{quarantine};
 
 	my @lines = ();
-	my @viruses = ();
-	my $retval = nza_exec("$NZA::ClamAV::CMD_CLAMSCAN $params $mp", \@lines);
+	my $retval = 0;
+
+	if ( $props->{async} ) {
+		nza_fork( $self, '_clamscan', $params, $mp, $props );
+		return \@lines;
+	} else {
+		$retval = nza_exec("$NZA::ClamAV::CMD_CLAMSCAN $params $mp", \@lines);
+	}
 
 	if ( $retval == 256 ) {
 
 		# TODO: parse output and report fault
-		for my $line (@lines) {
-			# ( $pathname, $virusname ) = ($line =~ /^(.+):\s+(\S+)\s+FOUND$/);
-			push @viruses, $1 if $line =~ /^(.+)\s+FOUND$/;
-			# push @viruses, $1 if $line =~ /^(WARNING.*)$/; # XXX ???
-		}
 		# TRACE("ClamAV: Viruses Found");
 		# map { TRACE("ClamAV: ${_}"); $_ } @viruses if scalar @viruses;
 
 		#
 		# log it
 		#
-		$NZA::server_obj->append_log( "ClamAV: Viruses Found", \@viruses );
+		$NZA::server_obj->append_log( "ClamAV: Viruses Found", $self->_get_viruses_from_lines( \@lines ) );
 
 		#
-		# broadcast it
+		# broadcast it FIXME: not work
 		#
-		my $timestamp = localtime();
-		my %evt_broadcast_props = (
-			type => 'clamav-scan',
-			name => 'ClamAV: Viruses Found',
-			'time' => $timestamp,
-			description  => join( "\n", @viruses ),
-		);
-		$NZA::server_obj->event_broadcast(\%evt_broadcast_props);
+		# my $timestamp = localtime();
+		# my @viruses = ();
+		# my %evt_broadcast_props = (
+			# type => 'clamav-scan',
+			# name => 'ClamAV: Viruses Found',
+			# 'time' => $timestamp,
+			# description  => join( "\n", @viruses ),
+		# );
+		# $NZA::server_obj->event_broadcast(\%evt_broadcast_props);
+		$self->send_email( \@lines, "by clamscan ${mp}", $props ) if $props->{email};
 
 	} elsif ( $retval != 0 ) {
 
@@ -452,6 +475,37 @@ sub clamscan {
 	@lines = map { chomp($_); "$_\n" } @lines;
 
 	return \@lines;
+}
+
+sub _get_viruses_from_lines {
+	my ($self, $lines) = @_;
+	my @viruses = ();
+
+	for my $line (@$lines) {
+
+		# ( $pathname, $virusname ) = ($line =~ /^(.+):\s+(\S+)\s+FOUND$/);
+		push @viruses, $1 if $line =~ /^(.+)\s+FOUND$/;
+
+		TRACE("ClamAV: $1") if $line =~ /^(WARNING.*)$/; # XXX ???
+		TRACE("ClamAV: $1") if $line =~ /^(.*\s+Removed\.)$/; # XXX ???
+	}
+
+	return \@viruses;
+}
+
+sub _get_summary_from_lines {
+	# TODO: split output into hash, and apply in report mail
+	my ($self, $lines) = @_;
+	my @summary = ();
+	my $summary_block = undef;
+
+	for my $line (@$lines) {
+
+		$summary_block = 1 if $line =~ /^-+\s+SCAN\s+SUMMARY\s+-+$/;
+		push @summary, $1 if $summary_block && $line =~ /^(.*)$/;
+	}
+
+	return \@summary;
 }
 
 sub _get_zfs_object {
@@ -592,6 +646,60 @@ sub schedule_destroy {
 	$NZA::server_obj->{runner}->{clamav_runner}->destroy($pathname);
 }
 
+#
+# send email apply filter on clamscan output
+#
+sub send_email {
+	my ( $self, $lines, $by, $params ) = @_;
+	# "by $CLAMAV_RUNNER_TYPE '$pathname'" aka subj
+	my $val = '';
+
+	my $timestamp = localtime();
+
+	my $appliance = $NZA::server_obj->get_impl_object('appliance');
+	my $network   = $NZA::server_obj->get_impl_object('network');
+	my $netif     = $NZA::server_obj->get_impl_object('network', 'interface');
+	my $mailer    = $NZA::server_obj->{mailer}->impl_object();
+	# my $mailer    = $NZA::server_obj->get_impl_object('mailer');
+
+	my $hostname  = $appliance->hostname();
+	my $sig       = $appliance->_get_machine_signature();
+	my $macaddr   = $netif->get_object($network->primary())->{'macaddr'};
+
+	my $viruses   = $self->_get_viruses_from_lines( $lines );
+	my $summary   = $self->_get_summary_from_lines( $lines );
+
+	my $subject   = "Viruses are found ${by}";
+
+	my $msg = "\n";
+
+	$msg .= "REPORT: *********************************************************************\n";
+	$msg .= "REPORT: Appliance   : $hostname\n"; # version?
+	$msg .= "REPORT: Machine SIG : $sig\n";
+	$msg .= "REPORT: Primary MAC : $macaddr\n";
+	$msg .= "REPORT: Reporter    : ClamAV scan\n";
+	$msg .= "REPORT: Time        : $timestamp\n";
+	$msg .= "REPORT: Scan params : \n";
+	foreach my $param (keys %$params) {
+		if ( $params->{$param} eq '1' ) {
+			$val = 'Yes';
+		} elsif ( $params->{$param} eq '' || $params->{$param} eq '0') {
+			$val = 'No';
+		} else {
+			$val = $params->{$param};
+		}
+
+		$msg .= "REPORT:             : ${param} = ${val}\n";
+	}
+	$msg .= "REPORT: *********************************************************************\n";
+	$msg .= "\n" . join( "\n", @$viruses ) . "\n\n" . join( "\n", @$summary );
+	# _get_formatted
+
+	#
+	# send report only if viruses detected
+	#
+	$mailer->send_report( $subject, $msg ) if scalar @$viruses;
+}
 
 #############################################################################
 package NZA::ClamAVIPC;
@@ -663,11 +771,11 @@ my %methods = (
 	},
 
 	#
-	# 
+	# /usr/bin/clamscan ( vol, folder, params )
 	#
 	clamscan => {
 
-		proto => "['string', 'string', 'bool', 'bool', 'string'], [['array', 'string']]",
+		proto => "['string', 'string', ['dict', 'string', 'string']], [['array', 'string']]",
 		access => $NZA::API_DELEGATE_IMPL,
 	},
 

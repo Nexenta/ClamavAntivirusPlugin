@@ -71,25 +71,31 @@ my $rc = nms_runner_init($pathname,
 
 exit 1 if ($rc != 0);
 
+my $props = {
+	recursive	=> ( $recursive ),
+	erase		=> ( $erase ),
+	email		=> ( $email ),
+	quarantine	=> ( $quarantine =~ /^\s*$/ ) ? '' : $quarantine,
+	async		=> '1',
+};
+
 eval {
 	# nms_runner_trace("ClamAV: plugin call to clamscan & ${pathname}");
 	my $lines = &NZA::plugin('nms-clamav-antivirus')->clamscan(
 			'',
 			$pathname,
-			( $recursive ),
-			( $erase ),
-			( $quarantine =~ /^\s*$/ ) ? '' : $quarantine
+			$props
 			);
 
-	my @viruses = ();
-	foreach my $line ( @$lines ) {
-		nms_runner_trace($NZA::TRACE_LEVEL_VVV, "$line");
-		push @viruses, $1 if $line =~ /^(.+)\s+FOUND$/;
-	}
-	foreach my $line ( @viruses ) {
-		nms_runner_trace("$line");
-	}
-	_send_email( \@viruses ) if ( scalar @viruses ) and ( $email );
+	# my @viruses = ();
+	# foreach my $line ( @$lines ) {
+		# nms_runner_trace($NZA::TRACE_LEVEL_VVV, "$line");
+		# push @viruses, $1 if $line =~ /^(.+)\s+FOUND$/;
+	# }
+	# foreach my $line ( @viruses ) {
+		# nms_runner_trace("$line");
+	# }
+	# _send_email( \@viruses ) if ( scalar @viruses ) and ( $email );
 
 	# XXX: isa(NZA::Trigger)
 	# if (scalar @viruses) {

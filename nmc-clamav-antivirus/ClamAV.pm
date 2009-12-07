@@ -204,6 +204,7 @@ my %setup_clamav_words =
 			_unknown => {
 				_enter => \&setup_clamav_antivirus_scan,
 				_recompute => \&NMC::Builtins::Show::show_fs_unknown_and_syspool,
+				_usage => \&setup_clamav_antivirus_scan_usage,
 			},
 		},
 	},
@@ -682,14 +683,21 @@ sub setup_clamav_antivirus_update
 #TODO: support location|path not only folders 
 sub setup_clamav_antivirus_scan
 {
-	my ($h, @path) = @_;
-	my( $yes, $recursive, $delete, $quarantine ) = &NMC::Util::get_optional('yrdq:', \@path);
-	my ($folder, $vol) = __zfs_set_vscan_get_args(\@path);
+	my ( $h, @path ) = @_;
+	my ( $yes, $recursive, $delete, $email, $quarantine ) = &NMC::Util::get_optional('yrdeq:', \@path);
+	my ( $folder, $vol ) = __zfs_set_vscan_get_args(\@path);
 	my $lines;
 
-	if (!$yes && !&NMC::Util::input_confirm("This operation may take some time. Proceed?")) {
+	if ( ! $yes && ! &NMC::Util::input_confirm( "This operation may take some time. Proceed?" ) ) {
 		return 0;
 	}
+
+	my $props = {
+		recursive	=> defined( $recursive ),
+		erase		=> defined( $delete ),
+		email		=> defined( $email ),
+		quarantine	=> defined( $quarantine ) ? NMC::Util::abs_path($quarantine) : '',
+	};
 
 	if ( defined( $folder ) && defined( $vol ) ) {
 
@@ -697,9 +705,7 @@ sub setup_clamav_antivirus_scan
 			$lines = &NZA::plugin('nms-clamav-antivirus')->clamscan(
 				$vol,
 				$folder,
-				defined( $recursive ),
-				defined( $delete ),
-				defined( $quarantine ) ? NMC::Util::abs_path($quarantine) : ''
+				$props
 				);
 		}; if( nms_catch( $@ ) ) {
 			nms_print_error( $@ );
@@ -730,12 +736,22 @@ sub setup_clamav_antivirus_scan_usage
 	print_out <<EOF;
 	$cmdline
 
-Usage: [-r] [-d] [-q DIR]
+Usage: [-r] [-d] [-e] [-q DIR] [-y]
 
-   -r 		scans subdirectories recursively (by default "off")
-   -d 		removes infected files. Be careful!
+   -r		scans subdirectories recursively (by default "off")
+
+   -d		removes infected files. Be careful!
+
+   -e		Send email to the appliance's administrator, with
+		generated notification about found viruses.
+
+		For details on appliance's mailer, please see:
+		'show appliance mailer'
+
    -q <DIR>	moves infected files into DIR
 
+   -y		Skip confirmation dialog by automatically
+		responding 'Yes'
 EOF
 }
 
@@ -842,10 +858,7 @@ Usage:	[-n path]
 			'show appliance mailer'
 
   -y			Skip confirmation dialog by automatically
-			responding Yes
-
-Destroy the specified $CLAMAV_RUNNER_TYPE.
-
+			responding 'Yes'
 
 See also: 'show $CLAMAV_RUNNER_TYPE'
 See also: 'setup $CLAMAV_RUNNER_TYPE'
@@ -866,7 +879,6 @@ sub clam_runner_create
 {
 	my ($h, @path) = @_;
 
-	# TODO: yes and no for all questions
 	my ($yes, $pathname, $type, $period, $day_within_period, $time_within_day, $recursive, $delete, $quarantine, $email) =
 		NMC::Util::get_optional('yn:i:p:D:T:rdq:e', \@path);
 
@@ -998,7 +1010,6 @@ Usage: [-y]
   -y	Skip confirmation dialog by automatically responding Yes
 
 Destroy the specified $CLAMAV_RUNNER_TYPE.
-
 
 See also: 'show $CLAMAV_RUNNER_TYPE'
 See also: 'setup $CLAMAV_RUNNER_TYPE'

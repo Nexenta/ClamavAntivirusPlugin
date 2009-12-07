@@ -99,8 +99,8 @@ sub _construct_all {
 	my $all_scripts = $container->{dbh}->selectall_arrayref("SELECT name FROM runners WHERE type = ?",
 								undef, $CLAMAV_RUNNER_TYPE);
 
-	my $all_script_names = $all_scripts->[0];
-	for my $script_name (@$all_script_names) {
+	for my $script_name_ref (@$all_scripts) {
+		my $script_name = $script_name_ref->[0];
 		my $rec = $container->get_runner($script_name);
 		my $obj = new NZA::ClamRunnerObject($script_name, $container);
 
@@ -111,6 +111,9 @@ sub _construct_all {
 		};
 
 		$obj->{tunables} = $container->__get_tunables($rec, '');
+
+		TRACE($NZA::TRACE_LEVEL_VVV, "ClamRunner: attach ${script_name}");
+
 		$container->attach($obj, 1);
 	}
 }

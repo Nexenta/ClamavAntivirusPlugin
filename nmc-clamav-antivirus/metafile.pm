@@ -19,7 +19,7 @@
 # CDDL HEADER END
 #
 #
-# Copyright (C) 2006-2009 Nexenta Systems, Inc.
+# Copyright (C) 2006-2010 Nexenta Systems, Inc.
 # All rights reserved.
 #
 # METAFILE FOR NMC

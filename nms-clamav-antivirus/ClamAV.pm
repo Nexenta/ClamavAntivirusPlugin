@@ -531,7 +531,7 @@ sub set_vscan_value {
 	my ($self, $vol, $folder, $value) = @_;
 	my $fol = $self->_get_zfs_object($vol, $folder);
 
-	TRACE($NZA::TRACE_LEVEL_VVV, "ClamAV: $value vscan at " . $fol->_get_type_str() .
+	TRACE($NZA::TRACE_LEVEL_VVV, "ClamAV: $value vscan at " . $fol->_get_printtype_str() .
 		" $vol/$folder, old:" . $fol->_get_child_prop('vscan'));
 
 	return unless $fol;
@@ -625,7 +625,7 @@ sub is_vscan_enabled {
 	my $fol = $self->_get_zfs_object($vol, $folder);
 	my $prop = $fol->_get_child_prop('vscan');
 
-	TRACE($NZA::TRACE_LEVEL_VVV, "ClamAV: at " . $fol->_get_type_str() .
+	TRACE($NZA::TRACE_LEVEL_VVV, "ClamAV: at " . $fol->_get_printtype_str() .
 		" $vol/$folder, vscan:" . $prop);
 
 	return 1 if ($prop eq 'on');

@@ -138,4 +138,9 @@ sub destroy {
 	$container->unregister($pathname);
 }
 
+sub resolve_obj_2_ipc {
+	my ($self, $child) = @_;
+	return $self;
+}
+
 1;

@@ -1,12 +1,12 @@
 Source: nmc-clamav-antivirus
 Section: base
 Priority: optional
-Maintainer: Sergey Voronezhskiy <sergey.voronezhskiy@gmail.com>
-Build-Depends: debhelper(>=4.9.5gnusol5)
+Maintainer: Nexenta Systems <maintainer@nexenta.com>
+Build-Depends: debhelper(>= 40-0-6)
 
 Package: nmc-clamav-antivirus
-Architecture: solaris-i386
-Depends: ${shlibs:Depends}, nmc (>= 1.1.9), nms-clamav-antivirus
+Architecture: any
+Depends: ${perl:Depends}, nmc (>= 40-0-0), nms-clamav-antivirus (>= 40-0-0)
 Description: [:nxplugin::nmc:clamav-antivirus] ClamAV AntiVirus extension for NMC
  ClamAV AntiVirus integration with NMC (console)
  .

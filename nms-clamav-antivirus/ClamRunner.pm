@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2006-2010 Nexenta Systems, Inc.
+# Copyright (C) 2005-2011 Nexenta Systems, Inc.
 # All rights reserved.
 #
 
@@ -19,7 +19,7 @@ my $CLAMAV_RUNNER_SCRIPT	= 'clamav-scan';
 sub new {
 	my ($class, $name, $parent) = @_;
 
-	# 
+	#
 	# the very first time pass is_new = 1 - the 2nd argument
 	#
         my $exec = "$NZA::LIBROOT/$CLAMAV_RUNNER_SCRIPT '$name'";
@@ -95,7 +95,7 @@ sub _construct_all {
 
 	#
 	# recovery old state of runners by our type
-	#  
+	#
 	my $all_scripts = $container->{dbh}->selectall_arrayref("SELECT name FROM runners WHERE type = ?",
 								undef, $CLAMAV_RUNNER_TYPE);
 
@@ -127,7 +127,7 @@ sub create {
 	$obj->{type} = $params->{type};
 	$obj->{params} = $params;
 	$obj->{tunables} = $tunables;
-	
+
 	$container->attach($obj, 1);
 }
 

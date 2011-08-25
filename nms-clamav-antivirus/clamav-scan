@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 #
-# Copyright (C) 2006-2009 Nexenta Systems, Inc.
+# Copyright (C) 2005-2011 Nexenta Systems, Inc.
 # All rights reserved.
 #
 
@@ -29,7 +29,7 @@ my $pathname;
 my $CLAMAV_RUNNER_TYPE = 'clamav-scan';
 
 ##################################################
-# 
+#
 ##################################################
 
 #
@@ -49,7 +49,7 @@ EOF
 #nms_runner_trace("@ARGV\n");
 
 #
-# runner init 
+# runner init
 #
 my $rc = nms_runner_init($pathname,
 			 flags => $NZA::RFLAG_USE_INIT_PARAMS,
@@ -129,7 +129,7 @@ exit 0;
 ####################################################
 # send email
 ####################################################
- 
+
 sub _send_email {
 	my %report = ();
 	my $lines = shift;

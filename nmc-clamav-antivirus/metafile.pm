@@ -19,7 +19,7 @@
 # CDDL HEADER END
 #
 #
-# Copyright (C) 2006-2010 Nexenta Systems, Inc.
+# Copyright (C) 2005-2011 Nexenta Systems, Inc.
 # All rights reserved.
 #
 # METAFILE FOR NMC
@@ -27,15 +27,14 @@
 package Plugin::NmcClamAV;
 use base qw(NZA::Plugin);
 
-$Plugin::CLASS				= 'NmcClamAV';
+$Plugin::CLASS = 'NmcClamAV';
 
-$Plugin::NmcClamAV::NAME		= 'nmc-clamav-antivirus';
-$Plugin::NmcClamAV::DESCRIPTION		= 'ClamAV the AntiVirus';
-$Plugin::NmcClamAV::LICENSE		= 'Open Source (CDDL)';
-$Plugin::NmcClamAV::AUTHOR		= 'Nexenta Systems, Inc';
-$Plugin::NmcClamAV::VERSION		= '0.9';
-$Plugin::NmcClamAV::GROUP		= 'clamav-antivirus';
-$Plugin::NmcClamAV::LOADER		= 'ClamAV.pm';
-@Plugin::NmcClamAV::FILES		= ('ClamAV.pm');
+$Plugin::NmcClamAV::NAME        = 'nmc-clamav-antivirus';
+$Plugin::NmcClamAV::DESCRIPTION = 'ClamAV the AntiVirus';
+$Plugin::NmcClamAV::LICENSE     = 'Open Source (CDDL)';
+$Plugin::NmcClamAV::AUTHOR      = 'Nexenta Systems, Inc';
+$Plugin::NmcClamAV::GROUP       = 'clamav-antivirus';
+$Plugin::NmcClamAV::LOADER      = 'ClamAV.pm';
+@Plugin::NmcClamAV::FILES       = ('ClamAV.pm');
 
 1;

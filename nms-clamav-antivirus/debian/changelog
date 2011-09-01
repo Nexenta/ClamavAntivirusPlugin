@@ -1,3 +1,12 @@
+nms-clamav-antivirus (40-0-0) unstable; urgency=low
+
+  * Migrated to NexentaStor 4.x
+  * Changed maintainer to Nexenta Systems
+  * Fixed debian/rules to use new debhelper
+  * Added top-level Makefile
+
+ -- Nexenta Systems <maintainer@nexenta.com>  Thu, 01 Sep 2011 20:38:02 +0400
+
 nms-clamav-antivirus (0.9) elatte; urgency=low
 
   * Add schedule

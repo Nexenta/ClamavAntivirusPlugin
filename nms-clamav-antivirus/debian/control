@@ -2,11 +2,11 @@ Source: nms-clamav-antivirus
 Section: base
 Priority: optional
 Maintainer: Nexenta Systems <maintainer@nexenta.com>
-Build-Depends: debhelper(>= 40-0-6)
+Build-Depends: debhelper (>= 40-0-11)
 
 Package: nms-clamav-antivirus
 Architecture: any
-Depends: ${perl:Depends}, nms-dev (>= 40-0-0), clamav, clamav-base, clamav-freshclam, clamav-testfiles, libclamav6, c-icap, service-storage-virus-scan
+Depends: nms (>= 40-0-0), file-gnu-coreutils, misc-clamav-0.97, service-storage-virus-scan
 Description: [:nxplugin::nms:!clamav-antivirus] ClamAV AntiVirus extension for NMS
  ClamAV AntiVirus integration with NMS (server)
  after install this plugin you must reboot
